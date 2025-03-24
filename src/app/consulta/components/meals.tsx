@@ -42,8 +42,8 @@ interface MealItemProps {
   setSelectedOptionForSummary: (mealIndex: number, optionIndex: number) => void;
   addMealOption: (mealIndex: number) => void;
   removeMealOption: (mealIndex: number, optionIndex: number) => void;
-  addIngredient: (mealIndex: number) => void;
-  removeIngredient: (mealIndex: number, ingredientIndex: number) => void;
+  addIngredient: (mealIndex: number, optionIndex?: number, ingredientData?: Ingredient) => void;
+  removeIngredient: (mealIndex: number, optionIndex: number, ingredientIndex: number) => void;
   handleIngredientNameChange: (mealIndex: number, ingredientIndex: number, value: string) => void;
   handleSelectIngredient: (mealIndex: number, ingredientIndex: number, ingredient: Ingredient) => void;
   handleIngredientChange: (mealIndex: number, ingredientIndex: number, field: IngredientNumericField, value: number) => void;
@@ -84,17 +84,42 @@ const MealItem: React.FC<MealItemProps> = ({
       handleInstructionsChange(mealIndex, meal.activeOptionIndex, savedOption.instructions);
     }
     
-    // Reemplazamos ingredientes (primero eliminamos todos los existentes)
-    const updatedMeals = [...meals];
-    const updatedMeal = { ...updatedMeals[mealIndex] };
-    const updatedOptions = [...updatedMeal.options];
-    updatedOptions[updatedMeal.activeOptionIndex] = {
-      ...updatedOptions[updatedMeal.activeOptionIndex],
-      ingredients: [...savedOption.ingredients]
-    };
-    updatedMeal.options = updatedOptions;
-    updatedMeals[mealIndex] = updatedMeal;
-    onMealsChange(updatedMeals);
+    // Para los ingredientes, necesitamos primero eliminar los existentes
+    // y luego agregar los nuevos uno por uno
+    
+    // Esta línea causaba el error porque 'meals' no existe
+    // const updatedMeals = [...meals];
+    
+    // En lugar de manipular directamente el array, usamos las funciones proporcionadas por props
+    
+    // Primero, si hay ingredientes existentes, los eliminamos
+    // Esto asume que tienes acceso a los ingredientes actuales
+    if (meal.options[meal.activeOptionIndex].ingredients) {
+      // Clonamos el array para evitar problemas de mutación
+      const currentIngredients = [...meal.options[meal.activeOptionIndex].ingredients];
+      
+      // Eliminamos cada ingrediente existente
+      for (let i = currentIngredients.length - 1; i >= 0; i--) {
+        removeIngredient(mealIndex, meal.activeOptionIndex, i);
+      }
+    }
+    
+    // Ahora agregamos los nuevos ingredientes
+    if (savedOption.ingredients && savedOption.ingredients.length > 0) {
+      savedOption.ingredients.forEach(ingredient => {
+        // Usamos la función addIngredient proporcionada como prop
+        addIngredient(mealIndex, meal.activeOptionIndex, ingredient);
+      });
+    }
+    
+    // Si hay una propiedad isSelectedForSummary, actualizarla
+    if (savedOption.isSelectedForSummary !== undefined) {
+      // Solo actualizamos si la opción tiene isSelectedForSummary como true y aún no está seleccionada,
+      // o si es false y actualmente está seleccionada
+      if (savedOption.isSelectedForSummary !== meal.options[meal.activeOptionIndex].isSelectedForSummary) {
+        setSelectedOptionForSummary(mealIndex, meal.activeOptionIndex);
+      }
+    }
   };
 
   return (
@@ -321,7 +346,7 @@ const MealItem: React.FC<MealItemProps> = ({
             {/* Ingredients table */}
             <div className="mt-2 flex justify-between items-center">
               <h3 className="text-sm mb-2 text-green60">Ingredientes</h3>
-              <button onClick={() => addIngredient(mealIndex)}
+              <button onClick={() => addIngredient(mealIndex, meal.activeOptionIndex)}
                 className="rounded border-gray-200 border hover:bg-gray-100 cursor-pointer text-gray70 text-xs px-2 py-1 mb-2 rounded flex items-center hover:bg-gray20">
                 <Strawberry size={20} className="mr-2 text-teal50" />
                 Añadir ingrediente
@@ -377,7 +402,7 @@ const MealItem: React.FC<MealItemProps> = ({
                         </td>
                       ))}
                       <td className="px-3">
-                        <TrashCan size={16} className="bg-gray300 text-blue90 cursor-pointer " onClick={() => removeIngredient(mealIndex, ingredientIndex)} />
+                        <TrashCan size={16} className="bg-gray300 text-blue90 cursor-pointer " onClick={() => removeIngredient(mealIndex, meal.activeOptionIndex, ingredientIndex)} />
                       </td>
                     </tr>
                   ))}
@@ -525,40 +550,40 @@ const Meals: React.FC<MealsProps> = ({
     onMealsChange(updatedMeals);
   };
 
-  const addIngredient = (mealIndex: number) => {
+  const addIngredient = (mealIndex: number, optionIndex?: number, ingredientData?: Ingredient) => {
     // Implementación como antes
     const updatedMeals = [...meals];
     const meal = { ...updatedMeals[mealIndex] };
     const options = [...meal.options];
-    const activeOption = { ...options[meal.activeOptionIndex] };
+    const activeOption = { ...options[optionIndex !== undefined ? optionIndex : meal.activeOptionIndex] };
     
     activeOption.ingredients = [
       ...activeOption.ingredients,
-      { name: '', quantity: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }
+      ingredientData || { name: '', quantity: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }
     ];
     
-    options[meal.activeOptionIndex] = activeOption;
+    options[optionIndex !== undefined ? optionIndex : meal.activeOptionIndex] = activeOption;
     meal.options = options;
     updatedMeals[mealIndex] = meal;
     onMealsChange(updatedMeals);
   };
 
-  const removeIngredient = (mealIndex: number, ingredientIndex: number) => {
-    // Implementación como antes
-    const updatedMeals = [...meals];
-    const meal = { ...updatedMeals[mealIndex] };
-    const options = [...meal.options];
-    const activeOption = { ...options[meal.activeOptionIndex] };
-    const ingredients = [...activeOption.ingredients];
-    
-    ingredients.splice(ingredientIndex, 1);
-    
-    activeOption.ingredients = ingredients;
-    options[meal.activeOptionIndex] = activeOption;
-    meal.options = options;
-    updatedMeals[mealIndex] = meal;
-    onMealsChange(updatedMeals);
-  };
+  const removeIngredient = (mealIndex: number, optionIndex: number, ingredientIndex: number) => {
+      // Implementación como antes
+      const updatedMeals = [...meals];
+      const meal = { ...updatedMeals[mealIndex] };
+      const options = [...meal.options];
+      const activeOption = { ...options[optionIndex] };
+      const ingredients = [...activeOption.ingredients];
+      
+      ingredients.splice(ingredientIndex, 1);
+      
+      activeOption.ingredients = ingredients;
+      options[optionIndex] = activeOption;
+      meal.options = options;
+      updatedMeals[mealIndex] = meal;
+      onMealsChange(updatedMeals);
+    };
 
   const handleIngredientNameChange = (mealIndex: number, ingredientIndex: number, value: string) => {
     // Implementación como antes

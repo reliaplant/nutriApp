@@ -243,7 +243,7 @@ export default function IngredientsPage() {
       {showAddModal && (
         <Dialog open={showAddModal} onClose={() => setShowAddModal(false)} className="fixed z-50 inset-0 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen">
-            <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+            <div className="fixed inset-0 bg-black opacity-30" />
             
             <div className="relative bg-white rounded-lg max-w-md w-full mx-auto p-6">
               <div className="absolute top-4 right-4">
