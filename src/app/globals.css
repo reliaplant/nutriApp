@@ -45,6 +45,23 @@
   background: #999;
 }
 
+input, textarea { 
+  border-radius: 3px;
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #b3b3b3;
+}
+
+input:focus, textarea:focus {
+  box-shadow: 0 0 15px rgba(5, 150, 105, 0.2);
+  outline: none;
+  border-color: #059669;
+}
+
+
+
 
 body {
   background: var(--background);

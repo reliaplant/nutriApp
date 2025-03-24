@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/app/service/firebase';
-import { NoodleBowl, Running, TrashCan } from '@carbon/icons-react';
+import { Apple, NoodleBowl, Running, TrashCan } from '@carbon/icons-react';
 
 const MenuPage = () => {
   const router = useRouter();
@@ -107,17 +107,28 @@ const MenuPage = () => {
                 </Link>
 
                 <Link
-                  href="/nutricion"
+                  href="/comidas"
                   className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
                 >
                   <NoodleBowl size={20} />
 
                   <span className="ml-2 relative">
-                    Recetas
+                    Comidas
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
                 </Link>
 
+                <Link
+                  href="/ingredientes"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <Apple size={20} />
+                  <span className="ml-2 relative">
+                    Ingredientes
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link>
+{/* 
                 <Link
                   href="/nutricion"
                   className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
@@ -128,16 +139,25 @@ const MenuPage = () => {
                     Ejercicios
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
-                </Link>
+                </Link> */}
               </div>
             </div>
 
             {/* Navigation links with improved spacing and transitions */}
             <div className="flex items-center">
 
+            <div className="hidden md:block text-sm">
+                  <span className="font-medium text-gray-700">
+                    {user?.displayName || "Usuario"}
+                  </span>
+                </div>
 
               {/* User profile with actual user data */}
               <div className="ml-6 relative flex-shrink-0" data-user-menu>
+                
+                
+
+
                 <button
                   type="button"
                   className="flex items-center space-x-2 bg-white rounded-full p-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"

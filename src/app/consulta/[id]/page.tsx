@@ -69,6 +69,23 @@ export default function CrearPlan() {
     // Más ingredientes...
   ];
 
+  // Añadir este estado para los parámetros nutricionales
+  const [nutritionParams, setNutritionParams] = useState({
+    weight: patient?.currentWeight || 70,
+    activityLevel: 'moderate',
+    goal: 'maintain',
+    weightGoal: 0,
+    macroDistribution: { protein: 30, carbs: 40, fat: 30 },
+    bmr: 0,
+    tdee: 0
+  });
+
+  // Añadir esta función para manejar cambios en los parámetros
+  const handleNutritionParamsChange = (updatedParams: any) => {
+    console.log("Parámetros actualizados:", updatedParams);
+    setNutritionParams(updatedParams);
+  };
+
   // Cargar datos del paciente y consulta
   useEffect(() => {
     const loadData = async () => {
@@ -122,6 +139,11 @@ export default function CrearPlan() {
             }
             if (consultationData.nutritionPlan.notes) {
               setNotasContent(consultationData.nutritionPlan.notes);
+            }
+            // AÑADIR ESTO:
+            if (consultationData.nutritionPlan.nutritionParams) {
+              console.log("Cargando parámetros guardados:", consultationData.nutritionPlan.nutritionParams);
+              setNutritionParams(consultationData.nutritionPlan.nutritionParams);
             }
           }
         } catch (consultationError) {
@@ -190,8 +212,11 @@ export default function CrearPlan() {
         meals: meals,
         notes: notasContent,
         totalNutrition: totalNutrition,
+        nutritionParams: nutritionParams, // Añadir esta línea
         lastUpdated: new Date().toISOString()
       };
+
+      console.log("Guardando plan con parámetros:", nutritionPlan);
 
       // Actualizar la consulta con el plan nutricional
       await consultationService.updateConsultation(
@@ -256,12 +281,16 @@ export default function CrearPlan() {
                     gender: (patient.gender === 'male' || patient.gender === 'female') ? patient.gender : 'male',
                     age: patient.birthDate ? moment().diff(moment(patient.birthDate, 'YYYY-MM-DD'), 'years') : 30,
                     height: patient.height || 170,
-                    weight: patient.currentWeight || 70,
-                    activityLevel: 'moderate',
-                    goal: 'maintain'
+                    weight: nutritionParams.weight || patient.currentWeight || 70,
+                    activityLevel: nutritionParams.activityLevel as any,
+                    goal: nutritionParams.goal as any,
+                    weightGoal: nutritionParams.weightGoal,
+                    name: patient.name // Añadir esta línea para pasar el nombre del paciente
                   } : undefined}
                   totalNutrition={totalNutrition}
                   showDetails={true}
+                  onNutritionParamsChange={handleNutritionParamsChange}
+                  initialMacroDistribution={nutritionParams.macroDistribution}
                 />
               </div>
             ) : (

@@ -204,14 +204,15 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 to-teal-50 p-6">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen w-full p-6 py-16">
+      <div className="max-w-5xl mx-auto py-6">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Sección izquierda */}
           <div className="flex-1 space-y-6">
             {/* Foto de perfil */}
             <div>
-              <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white bg-gray-100">
+                <div className="relative w-42 h-42 rounded-full overflow-hidden border-4 border-white bg-gray-100 ring-2 ring-emerald-500 ring-offset-2">
+
                 {profile.avatarUrl ? (
                   <Image
                     src={profile.avatarUrl}
@@ -236,7 +237,7 @@ export default function ProfilePage() {
                   </div>
                 )}
                 {isEditing && (
-                  <label className="absolute inset-0 bg-black bg-opacity-40 cursor-pointer flex items-center justify-center text-white">
+                  <label className="absolute inset-0 bg-black/30 bg-opacity-40 cursor-pointer flex items-center justify-center text-white">
                     <span className="sr-only">Cambiar foto</span>
                     <input
                       type="file"
@@ -256,63 +257,7 @@ export default function ProfilePage() {
                 )}
               </div>
             </div>
-            {/* Firma */}
-            <div>
-              <label className="flex items-center mb-2">
-                <span className="text-sm text-gray-600 mr-3">Usar firma real</span>
-                <input
-                  type="checkbox"
-                  checked={formData.useRealSignature || false}
-                  onChange={() => handleToggleChange('useRealSignature')}
-                  className="h-4 w-4 text-emerald-600 border-gray-300 rounded"
-                  disabled={!isEditing}
-                />
-              </label>
-              {formData.useRealSignature ? (
-                <div className="flex items-center">
-                  {profile.signatureUrl ? (
-                    <img
-                      src={profile.signatureUrl}
-                      alt="Firma"
-                      className="max-h-16 object-contain border border-gray-200"
-                    />
-                  ) : (
-                    <div className="text-sm text-gray-400">Sin firma subida</div>
-                  )}
-                  {isEditing && (
-                    <div className="ml-4">
-                      <label className="text-sm bg-emerald-600 text-white px-3 py-2 rounded cursor-pointer hover:bg-emerald-700">
-                        Subir firma
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={e => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'signature')}
-                          disabled={uploadingImage}
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-2">
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="textSignature"
-                      value={formData.textSignature || ''}
-                      onChange={handleInputChange}
-                      placeholder="Escribe tu 'firma' de texto"
-                      className="w-full p-2 border rounded focus:ring-2 focus:ring-emerald-500"
-                    />
-                  ) : (
-                    <p className="text-gray-700 italic">
-                      {profile.textSignature || 'No se especificó firma'}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            
           </div>
           {/* Sección derecha */}
           <div className="flex-[2] space-y-6">
@@ -550,55 +495,107 @@ export default function ProfilePage() {
                 <p className="text-gray-700">{profile.officeAddress || 'No especificada'}</p>
               )}
             </div>
-            {/* Logo de la consulta */}
-            <div>
-              <label className="block text-sm text-gray-600 mb-2">Logo de la consulta</label>
-              <div className="flex items-center space-x-4">
+            {/* Logo Section */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Logo</label>
+              <div className="relative w-full h-48 bg-white rounded-lg border-2  border-gray-300  transition-colors duration-200">
                 {profile.logoUrl ? (
-                  <div className="h-16 w-16 flex-shrink-0 relative">
-                    <Image
+                  <div className="relative w-full h-full group">
+                    <img
                       src={profile.logoUrl}
                       alt="Logo"
-                      fill
-                      sizes="100%"
-                      className="object-contain"
-                      unoptimized
+                      className="w-full h-full object-contain rounded-lg"
                     />
                     {isEditing && (
-                      <label className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 cursor-pointer">
+                      <label className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-lg">
                         <span className="sr-only">Cambiar Logo</span>
                         <input
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) =>
-                            e.target.files?.[0] && handleImageUpload(e.target.files[0], 'logo')
-                          }
+                          onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'logo')}
                           disabled={uploadingImage}
                         />
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white"
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+                        <div className="text-white text-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <p className="mt-2 text-sm">Cambiar logo</p>
+                        </div>
                       </label>
                     )}
                   </div>
-                ) : isEditing ? (
-                  <label className="px-3 py-2 bg-gray-200 text-gray-700 rounded shadow cursor-pointer hover:bg-gray-300">
-                    Subir logo
+                ) : (
+                  <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="mt-2 block text-sm font-medium text-gray-500">
+                      Subir logo
+                    </span>
+                    <span className="mt-1 block text-xs text-gray-400">
+                      PNG, JPG (max. 2MB)
+                    </span>
                     <input
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) =>
-                        e.target.files?.[0] && handleImageUpload(e.target.files[0], 'logo')
-                      }
+                      onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'logo')}
                       disabled={uploadingImage}
                     />
                   </label>
+                )}
+              </div>
+            </div>
+            {/* Signature Section */}
+            <div className="space-y-2 mt-6">
+              <label className="block text-sm font-medium text-gray-700">Firma</label>
+              <div className="relative w-full h-48 bg-white rounded-lg border-2  border-gray-300  transition-colors duration-200">
+                {profile.signatureUrl ? (
+                  <div className="relative w-full h-full group">
+                    <img
+                      src={profile.signatureUrl}
+                      alt="Firma"
+                      className="w-full h-full object-contain rounded-lg"
+                    />
+                    {isEditing && (
+                      <label className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-lg">
+                        <span className="sr-only">Cambiar Firma</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'signature')}
+                          disabled={uploadingImage}
+                        />
+                        <div className="text-white text-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                          <p className="mt-2 text-sm">Cambiar firma</p>
+                        </div>
+                      </label>
+                    )}
+                  </div>
                 ) : (
-                  <p className="text-gray-400 text-sm">Sin logo</p>
+                  <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    <span className="mt-2 block text-sm font-medium text-gray-500">
+                      Subir firma
+                    </span>
+                    <span className="mt-1 block text-xs text-gray-400">
+                      PNG, JPG (max. 2MB)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'signature')}
+                      disabled={uploadingImage}
+                    />
+                  </label>
                 )}
               </div>
             </div>

@@ -9,6 +9,7 @@ interface PatientData {
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very-active';
   goal: 'lose' | 'maintain' | 'gain';
   weightGoal?: number; // kg per month
+  name?: string; // Añade esta propiedad
 }
 
 interface NutritionSummaryProps {
@@ -16,6 +17,24 @@ interface NutritionSummaryProps {
   totalNutrition?: any;
   showDetails?: boolean;
   onSaveChanges?: (data: any) => void;
+  onNutritionParamsChange?: (params: {
+    weight: number;
+    activityLevel: string;
+    goal: string;
+    weightGoal: number;
+    macroDistribution: {
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
+    bmr: number;
+    tdee: number;
+  }) => void;
+  initialMacroDistribution?: {
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
 }
 
 // Constantes
@@ -59,7 +78,9 @@ const NutritionalSummary = ({
   patientData = DEFAULT_PATIENT_DATA,
   totalNutrition,
   showDetails = false,
-  onSaveChanges
+  onSaveChanges,
+  onNutritionParamsChange,
+  initialMacroDistribution
 }: NutritionSummaryProps) => {
   // Estados
   const [editableData, setEditableData] = useState({
@@ -69,8 +90,9 @@ const NutritionalSummary = ({
     weightGoal: patientData.weightGoal || 2
   });
 
-  const [useCustomMacros, setUseCustomMacros] = useState(false);
   const [customMacros, setCustomMacros] = useState(DEFAULT_MACROS);
+  const [macrosAreCustomized, setMacrosAreCustomized] = useState(false);
+  const [isEditingMacros, setIsEditingMacros] = useState(false);
   const [theoreticalValues, setTheoreticalValues] = useState({
     bmr: 0,
     tdee: 0,
@@ -140,7 +162,7 @@ const NutritionalSummary = ({
     }
 
     // Calcular macronutrientes
-    const macros = useCustomMacros ? customMacros : DEFAULT_MACROS;
+    const macros = macrosAreCustomized ? customMacros : DEFAULT_MACROS;
     const protein = Math.round((dailyCalories * (macros.protein / 100)) / 4); // 4 kcal/g
     const carbs = Math.round((dailyCalories * (macros.carbs / 100)) / 4);     // 4 kcal/g
     const fat = Math.round((dailyCalories * (macros.fat / 100)) / 9);         // 9 kcal/g
@@ -158,6 +180,21 @@ const NutritionalSummary = ({
     // Si hay función de guardar, notificar los cambios
     if (onSaveChanges) {
       onSaveChanges(calculationData);
+    }
+
+    // Notificar al componente padre de los cambios
+    if (onNutritionParamsChange) {
+      const macros = macrosAreCustomized ? customMacros : DEFAULT_MACROS;
+      
+      onNutritionParamsChange({
+        weight: editableData.weight,
+        activityLevel: editableData.activityLevel,
+        goal: editableData.goal,
+        weightGoal: editableData.weightGoal,
+        macroDistribution: macros,
+        bmr: Math.round(bmr),
+        tdee: Math.round(tdee)
+      });
     }
   };
 
@@ -184,7 +221,7 @@ const NutritionalSummary = ({
 
     if (sum !== 100) {
       const otherFields = Object.keys(updatedMacros).filter(key => key !== name);
-      const finalTotal = numValue + otherFields.reduce((total, field) => total + updatedMacros[field], 0);
+      const finalTotal = numValue + otherFields.reduce((total, field) => total + updatedMacros[field as keyof typeof updatedMacros], 0);
 
       if (finalTotal !== 100 && otherFields.length > 0) {
         updatedMacros[otherFields[0] as keyof typeof updatedMacros] += (100 - finalTotal);
@@ -196,17 +233,54 @@ const NutritionalSummary = ({
 
   // Actualizar cálculos cuando cambian los inputs
   useEffect(() => {
-    calculateTheoreticalValues();
-  }, [patientData, editableData, customMacros, useCustomMacros]);
+    if (initialMacroDistribution) {
+      setCustomMacros(initialMacroDistribution);
+      setMacrosAreCustomized(true); // Indica que son personalizados
+      // Pero NO activamos automáticamente el modo edición
+    }
+  }, [initialMacroDistribution]);
+
+  useEffect(() => {
+    // Solo calcular cuando los inputs cambien, no cuando se actualizan los valores teóricos
+    const timer = setTimeout(() => {
+      calculateTheoreticalValues();
+    }, 300); // debounce para evitar cálculos excesivos
+    
+    return () => clearTimeout(timer);
+  }, [patientData, editableData.weight, editableData.activityLevel, 
+      editableData.goal, editableData.weightGoal, macrosAreCustomized, customMacros]);
+
+  // Función para activar el modo edición
+  const handleCustomizeMacros = () => {
+    setIsEditingMacros(true);
+  };
+
+  // Función para guardar los cambios
+  const handleSaveMacros = () => {
+    setMacrosAreCustomized(true);
+    setIsEditingMacros(false);
+    calculateTheoreticalValues(); // Actualizar valores con macros personalizados
+  };
+
+  // Función para cancelar edición
+  const handleCancelMacros = () => {
+    setIsEditingMacros(false);
+    if (!macrosAreCustomized) {
+      // Si no había macros personalizados antes, volver a los valores predeterminados
+      setCustomMacros(DEFAULT_MACROS);
+    }
+  };
 
   return (
     <div className="p-1">
       {/* Título */}
       <div className="mb-3 flex justify-between items-center">
         <div>
-          <span className="ml-1 font-bold">Andrés Enrique Leonza
-            <span className='pl-2 text-gray50 font-light'>
-              ({patientData.gender === 'male' ? 'Masculino' : 'Femenino'})</span>
+          <span className="ml-1 font-bold">
+            {patientData.name || 'Paciente'}
+            <span className='pl-2 text-gray-500 font-light'>
+              ({patientData.gender === 'male' ? 'Masculino' : 'Femenino'})
+            </span>
           </span>
         </div>
       </div>
@@ -307,26 +381,43 @@ const NutritionalSummary = ({
       </div>
 
       {/* Distribución de macronutrientes */}
-      <div className="mt-6">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-sm font-bold">Distribución de Macros</h3>
-          <div className="flex items-center">
-            <span
-              className="text-xs text-blue-600 cursor-pointer hover:underline"
-              onClick={() => setUseCustomMacros(!useCustomMacros)}
+      <div className="mt-4">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-sm font-medium text-gray-700">Distribución de macronutrientes</h3>
+          
+          {!isEditingMacros ? (
+            <button
+              onClick={handleCustomizeMacros}
+              className="text-xs text-blue-600 hover:text-blue-800"
             >
-              {useCustomMacros ? 'Confirmar' : 'Personalizar'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex space-x-2 text-xs">
-          <div className="flex-1 border border-gray-200 rounded border overflow-hidden text-center">
-            <div className="bg-red-100/50 px-2 py-1 border-b border-red-200">
-              <span className="font-medium text-red-700">Proteínas</span>
+              {macrosAreCustomized ? "Editar" : "Personalizar"}
+            </button>
+          ) : (
+            <div className="flex space-x-2">
+              <button
+                onClick={handleSaveMacros}
+                className="text-xs text-green-600 hover:text-green-800"
+              >
+                Guardar
+              </button>
+              <button
+                onClick={handleCancelMacros}
+                className="text-xs text-gray-600 hover:text-gray-800"
+              >
+                Cancelar
+              </button>
             </div>
-            <div className="p-2 text-center">
-              {useCustomMacros ? (
+          )}
+        </div>
+        
+        {/* Mostrar información de macros o controles de edición */}
+        {isEditingMacros ? (
+          <div className="flex space-x-2 text-xs">
+            <div className="flex-1 border border-gray-200 rounded border overflow-hidden text-center">
+              <div className="bg-red-100/50 px-2 py-1 border-b border-red-200">
+                <span className="font-medium text-red-700">Proteínas</span>
+              </div>
+              <div className="p-2 text-center">
                 <div className="flex justify-center items-center">
                   <input 
                     type="number" 
@@ -339,19 +430,15 @@ const NutritionalSummary = ({
                   />
                   <span className="ml-0.5">%</span>
                 </div>
-              ) : (
-                <div className="font">{customMacros.protein}%</div>
-              )}
-              <div className="mt-1 font-bold text-sm">{theoreticalValues.protein}g</div>
+                <div className="mt-1 font-bold text-sm">{theoreticalValues.protein}g</div>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex-1 border border-gray-200 rounded border overflow-hidden text-center">
-            <div className="bg-amber-100/50 px-2 py-1 border-b border-amber-200">
-              <span className="font-medium text-amber-700">Carbos</span>
-            </div>
-            <div className="p-2 text-center">
-              {useCustomMacros ? (
+            
+            <div className="flex-1 border border-gray-200 rounded border overflow-hidden text-center">
+              <div className="bg-amber-100/50 px-2 py-1 border-b border-amber-200">
+                <span className="font-medium text-amber-700">Carbos</span>
+              </div>
+              <div className="p-2 text-center">
                 <div className="flex justify-center items-center">
                   <input 
                     type="number" 
@@ -364,19 +451,15 @@ const NutritionalSummary = ({
                   />
                   <span className="ml-0.5">%</span>
                 </div>
-              ) : (
-                <div className="font">{customMacros.carbs}%</div>
-              )}
-              <div className="mt-1 font-bold text-sm">{theoreticalValues.carbs}g</div>
+                <div className="mt-1 font-bold text-sm">{theoreticalValues.carbs}g</div>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex-1 border border-gray-200 rounded border overflow-hidden">
-            <div className="bg-blue-100/50 px-2 py-1 border-b border-blue-200">
-              <span className="font-medium text-blue-700">Grasas</span>
-            </div>
-            <div className="p-2 text-center">
-              {useCustomMacros ? (
+            
+            <div className="flex-1 border border-gray-200 rounded border overflow-hidden">
+              <div className="bg-blue-100/50 px-2 py-1 border-b border-blue-200">
+                <span className="font-medium text-blue-700">Grasas</span>
+              </div>
+              <div className="p-2 text-center">
                 <div className="flex justify-center items-center">
                   <input 
                     type="number" 
@@ -389,13 +472,26 @@ const NutritionalSummary = ({
                   />
                   <span className="ml-0.5">%</span>
                 </div>
-              ) : (
-                <div className="font">{customMacros.fat}%</div>
-              )}
-              <div className="mt-1 font-bold text-sm">{theoreticalValues.fat}g</div>
+                <div className="mt-1 font-bold text-sm">{theoreticalValues.fat}g</div>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <div className="text-xs text-gray-500">Proteínas</div>
+              <div className="font-medium">{macrosAreCustomized ? customMacros.protein : DEFAULT_MACROS.protein}%</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">Carbohidratos</div>
+              <div className="font-medium">{macrosAreCustomized ? customMacros.carbs : DEFAULT_MACROS.carbs}%</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">Grasas</div>
+              <div className="font-medium">{macrosAreCustomized ? customMacros.fat : DEFAULT_MACROS.fat}%</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Comparación con el plan actual - Solo si hay datos del plan */}

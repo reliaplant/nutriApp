@@ -13,7 +13,8 @@ import {
   serverTimestamp,
   Timestamp,
   orderBy,
-  setDoc
+  setDoc,
+  increment  // <-- Añadir esta importación
 } from "firebase/firestore";
 import { getStorage } from 'firebase/storage';
 import { 
@@ -114,6 +115,28 @@ export interface NutritionUser {
   textSignature?: string;       // para firma generada
   useRealSignature?: boolean;   // toggle de firma real o generada
   createdAt: Timestamp;
+}
+
+// Interfaz para comidas guardadas
+export interface SavedMeal {
+  id?: string;
+  name: string;
+  description: string;
+  imageUrl?: string;
+  mealOption: {
+    ingredients: Array<{
+      name: string;
+      quantity: number;
+      calories: number;
+    }>;
+    content: string;
+    instructions?: string;
+  };
+  category?: string;
+  usageCount?: number;
+  lastUsedDate?: Timestamp;
+  createdAt?: Timestamp;
+  nutritionistId: string;
 }
 
 // Authentication service
@@ -460,5 +483,135 @@ export const consultationService = {
   // Marcar una consulta como completada
   async completeConsultation(patientId: string, consultationId: string): Promise<void> {
     await this.updateConsultation(patientId, consultationId, { status: 'completed' });
+  }
+};
+
+// Servicio para manejar comidas guardadas
+export const savedMealService = {
+  // Obtener todas las comidas del nutricionista actual
+  async getSavedMeals(): Promise<SavedMeal[]> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para ver tus comidas guardadas");
+    }
+    
+    const mealsQuery = query(
+      collection(db, "savedMeals"),
+      where("nutritionistId", "==", currentUser.uid),
+      orderBy("name")
+    );
+    
+    const querySnapshot = await getDocs(mealsQuery);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as SavedMeal));
+  },
+  
+  // Obtener una comida por ID
+  async getSavedMealById(id: string): Promise<SavedMeal | null> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para ver detalles de comidas");
+    }
+    
+    const docRef = doc(db, "savedMeals", id);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const mealData = docSnap.data() as SavedMeal;
+      
+      // Verificación de seguridad
+      if (mealData.nutritionistId !== currentUser.uid) {
+        throw new Error("No tienes permiso para acceder a esta comida");
+      }
+      
+      return { id: docSnap.id, ...mealData };
+    } else {
+      return null;
+    }
+  },
+  
+  // Crear una nueva comida
+  async createSavedMeal(meal: SavedMeal): Promise<string> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para crear una comida");
+    }
+    
+    const mealData = {
+      ...meal,
+      nutritionistId: currentUser.uid,
+      usageCount: 0,
+      createdAt: serverTimestamp(),
+    };
+    
+    const docRef = await addDoc(collection(db, "savedMeals"), mealData);
+    return docRef.id;
+  },
+  
+  // Actualizar una comida
+  async updateSavedMeal(id: string, mealData: Partial<SavedMeal>): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para actualizar comidas");
+    }
+    
+    // Verificar que esta comida pertenece al usuario actual
+    const mealRef = doc(db, "savedMeals", id);
+    const docSnap = await getDoc(mealRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error("Comida no encontrada");
+    }
+    
+    const existingMeal = docSnap.data() as SavedMeal;
+    if (existingMeal.nutritionistId !== currentUser.uid) {
+      throw new Error("No tienes permiso para actualizar esta comida");
+    }
+    
+    // Evitar cambiar el ID del nutricionista
+    const safeData = { ...mealData };
+    delete safeData.nutritionistId;
+    
+    await updateDoc(mealRef, safeData);
+  },
+  
+  // Eliminar una comida
+  async deleteSavedMeal(id: string): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para eliminar comidas");
+    }
+    
+    // Verificar que esta comida pertenece al usuario actual
+    const mealRef = doc(db, "savedMeals", id);
+    const docSnap = await getDoc(mealRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error("Comida no encontrada");
+    }
+    
+    const existingMeal = docSnap.data() as SavedMeal;
+    if (existingMeal.nutritionistId !== currentUser.uid) {
+      throw new Error("No tienes permiso para eliminar esta comida");
+    }
+    
+    await deleteDoc(mealRef);
+  },
+  
+  // Incrementar el contador de uso de una comida
+  async incrementUsageCount(id: string): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para utilizar esta función");
+    }
+    
+    const mealRef = doc(db, "savedMeals", id);
+    
+    await updateDoc(mealRef, {
+      usageCount: increment(1),
+      lastUsedDate: serverTimestamp()
+    });
   }
 };
