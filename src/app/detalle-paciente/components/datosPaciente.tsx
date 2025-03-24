@@ -27,11 +27,12 @@ interface LastWeight {
   date: string | null;
 }
 
+// Actualizar la interfaz para aceptar una función asíncrona
 interface DatosPacienteProps {
   patient: Patient;
   lastWeight: LastWeight;
-  onPatientUpdate: (updatedPatient: Patient) => void;
-  onDeletePatient?: (patientId: string) => Promise<void>; // Add this line
+  onPatientUpdate: (updatedPatient: Patient) => void | Promise<void>; // Modificar aquí para aceptar Promise
+  onDeletePatient?: (patientId: string) => void | Promise<void>; // También aquí si es necesario
 }
 
 // Patient avatar component with upload functionality

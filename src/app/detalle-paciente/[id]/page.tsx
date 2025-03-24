@@ -9,7 +9,8 @@ import DatosPaciente from '@/app/detalle-paciente/components/datosPaciente';
 import Consultas from '@/app/detalle-paciente/components/consultas';
 import Evolucion from '@/app/detalle-paciente/components/evolucion';
 import Documentos, { PatientDocument } from '@/app/detalle-paciente/components/documentos';
-import { patientService } from '@/app/service/firebase';
+import { patientService, consultationService } from '@/app/service/firebase';
+import { ref, storage } from '@/app/service/firebase';
 
 // Importar estas bibliotecas adicionales al inicio del archivo
 import {
@@ -49,10 +50,12 @@ interface Patient {
     gender: 'male' | 'female' | 'other';
     country: string;
     status: 'active' | 'discharged' | 'lost';
+    nutritionistId: string;
 }
 
 interface Consultation {
-    id: string;
+    id?: string;
+    patientId: string;
     date: string;
     weight?: number;
     comments?: string;
@@ -82,7 +85,8 @@ const PatientDetailPage = () => {
         currentWeight: 0,
         gender: 'other',
         country: '',
-        status: 'active'
+        status: 'active',
+        nutritionistId: ''
     });
 
     const [loading, setLoading] = useState<boolean>(true);
@@ -143,24 +147,30 @@ const PatientDetailPage = () => {
     }, [patientId]);
 
     // Función para actualizar el paciente
-    const handlePatientUpdate = async (updatedPatient: Patient) => {
-        try {
-            if (patientId === 'new') {
-                // Crear nuevo paciente
-                const newPatientId = await patientService.createPatient(updatedPatient);
-                alert('Paciente creado con éxito');
-                router.push(`/detalle-paciente/${newPatientId}`);
-            } else {
-                // Actualizar paciente existente
-                await patientService.updatePatient(patientId, updatedPatient);
-                setPatient(updatedPatient);
-                alert('Datos del paciente actualizados');
+        const handlePatientUpdate = async (updatedPatient: Omit<Patient, 'nutritionistId'> & { nutritionistId?: string }) => {
+            try {
+                // Ensure nutritionistId is included
+                const completePatient: Patient = {
+                    ...updatedPatient,
+                    nutritionistId: updatedPatient.nutritionistId || patient.nutritionistId
+                };
+                
+                if (patientId === 'new') {
+                    // Crear nuevo paciente
+                    const newPatientId = await patientService.createPatient(completePatient);
+                    alert('Paciente creado con éxito');
+                    router.push(`/detalle-paciente/${newPatientId}`);
+                } else {
+                    // Actualizar paciente existente
+                    await patientService.updatePatient(patientId, completePatient);
+                    setPatient(completePatient);
+                    alert('Datos del paciente actualizados');
+                }
+            } catch (err) {
+                console.error('Error al guardar paciente:', err);
+                // alert('Error al guardar los datos del paciente');
             }
-        } catch (err) {
-            console.error('Error al guardar paciente:', err);
-            // alert('Error al guardar los datos del paciente');
-        }
-    };
+        };
 
     // Add this function to handle patient deletion
     const handleDeletePatient = async (patientId: string) => {
