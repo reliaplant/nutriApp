@@ -9,6 +9,7 @@ import { Search, ArrowDown, ArrowUp, Pencil, Trash2, PlusCircle } from 'lucide-r
 import { MealOption } from '@/app/consulta/components/meals';
 import MealsBiblioteca from './components/mealsBiblioteca';
 import { Merienda } from 'next/font/google';
+import { categoryLabels, categoryColors } from './constants';
 
 // Definición de interfaz para comidas guardadas
 export interface SavedMeal {
@@ -22,22 +23,15 @@ export interface SavedMeal {
     carbs: number;
     fat: number;
   };
-  createdAt: any;
+  createdAt: any; // Cambiar a cualquier tipo para permitir null y Timestamp
   usageCount: number;
-  lastUsedDate: any;
-  imageUrl?: string;
+  lastUsedDate: any; // Cambiar a cualquier tipo para permitir null y Timestamp
+  imageUrl?: string | null; // Permitir explícitamente string o null
 }
 
 export default function SavedMealsPage() {
-  // Definir categoryLabels dentro del componente
-  const categoryLabels = {
-    'desayuno': 'Desayuno',
-    'mediaManana': 'Media Mañana',
-    'almuerzo': 'Almuerzo',
-    'lunchTarde': 'Lunch Tarde',
-    'cena': 'Cena',
-    'general': 'General'
-  };
+  // Eliminar la definición local de categoryLabels
+  // const categoryLabels = {...}; <- Eliminar esto
 
   // Estados
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
@@ -449,7 +443,7 @@ export default function SavedMealsPage() {
       {/* Componente hijo para manejo de modales de edición/eliminación/creación */}
       {(isEditorOpen || isDeleteConfirmOpen || isCreateModalOpen) && (
         <MealsBiblioteca 
-          meals={savedMeals}
+          meals={savedMeals} // Pasa el array directamente sin manipularlo
           loading={false}
           error=""
           onMealsUpdated={onMealsUpdated}

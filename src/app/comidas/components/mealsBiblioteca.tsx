@@ -12,7 +12,8 @@ import {
   Save 
 } from '@carbon/icons-react';
 import { ChevronDown, X, AlertCircle } from 'lucide-react';
-import { SavedMeal, categoryLabels } from '../page';
+import { SavedMeal } from '../page';
+import { categoryLabels, categoryColors } from '../constants';
 import IngredientTypeahead, { Ingredient } from '@/app/consulta/components/IngredientTypeahead';
 import { MealOption } from '@/app/consulta/components/meals';
 import { 
@@ -24,7 +25,7 @@ import { COMMON_INGREDIENTS } from '@/app/consulta/components/ingredientsData';
 type IngredientNumericField = 'quantity' | 'calories' | 'protein' | 'carbs' | 'fat';
 
 interface MealsBibliotecaProps {
-  meals: SavedMeal[];
+  meals: SavedMeal[]; // Asegúrate de que el tipo es SavedMeal[]
   loading: boolean;
   error: string;
   onMealsUpdated: (meals: SavedMeal[]) => void;
@@ -76,9 +77,10 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
       carbs: 0,
       fat: 0
     },
-    createdAt: null,
+    createdAt: null, // Ahora acepta null por la modificación en la interfaz
     usageCount: 0,
-    lastUsedDate: null
+    lastUsedDate: null, // Ahora acepta null por la modificación en la interfaz
+    imageUrl: null // Ahora acepta null por la modificación en la interfaz
   });
   
   // Estado para ingredientes
@@ -153,28 +155,38 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
       // Subir imagen si hay una nueva
       let imageUrl = editingMeal.imageUrl;
       if (imageUpload) {
-        imageUrl = (await uploadImage()) ?? undefined;
+        imageUrl = await uploadImage();
+      }
+      
+      // Preparar objeto para Firebase sin valores undefined
+      const updateData: any = {
+        name: editingMeal.name || '',
+        category: editingMeal.category || 'general',
+        mealOption: {
+          content: editingMeal.mealOption.content || '',
+          instructions: editingMeal.mealOption.instructions || '',
+          ingredients: editingMeal.mealOption.ingredients || [],
+          isSelectedForSummary: editingMeal.mealOption.isSelectedForSummary || true
+        },
+        totalNutrition: totalNutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      };
+      
+      // Solo incluir imageUrl si no es undefined
+      if (imageUrl !== undefined) {
+        updateData.imageUrl = imageUrl || null; // Asegurarnos de usar null si es falsy
       }
       
       const mealRef = doc(db, `users/${user.uid}/savedMealOptions`, editingMeal.id);
-      await updateDoc(mealRef, {
-        name: editingMeal.name,
-        category: editingMeal.category,
-        imageUrl: imageUrl || undefined,
-        mealOption: {
-          content: editingMeal.mealOption.content,
-          instructions: editingMeal.mealOption.instructions,
-          ingredients: editingMeal.mealOption.ingredients,
-          isSelectedForSummary: editingMeal.mealOption.isSelectedForSummary
-        },
-        totalNutrition
-      });
+      await updateDoc(mealRef, updateData);
       
       // Actualizar estado local y parent
       const updatedMeals = meals.map(meal => 
-        meal.id === editingMeal.id ? {...editingMeal, totalNutrition, imageUrl} : meal
+        meal.id === editingMeal.id ? {...editingMeal, totalNutrition, imageUrl: imageUrl || null} : meal
       );
       onMealsUpdated(updatedMeals);
+      
+      // Cerrar modal después de guardar con éxito
+      handleClose();
     } catch (err) {
       console.error('Error al guardar cambios:', err);
       setActionError('Error al guardar cambios');
@@ -204,17 +216,18 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
         imageUrl = await uploadImage();
       }
       
+      // Preparar objeto para Firebase sin valores undefined
       const newMealData = {
-        name: newMeal.name,
-        category: newMeal.category,
-        imageUrl: imageUrl || undefined,
+        name: newMeal.name || '',
+        category: newMeal.category || 'general',
+        imageUrl: imageUrl || null, // Siempre usar null en lugar de undefined
         mealOption: {
-          content: newMeal.mealOption.content,
-          instructions: newMeal.mealOption.instructions,
-          ingredients: newMeal.mealOption.ingredients,
-          isSelectedForSummary: newMeal.mealOption.isSelectedForSummary
+          content: newMeal.mealOption.content || '',
+          instructions: newMeal.mealOption.instructions || '',
+          ingredients: newMeal.mealOption.ingredients || [],
+          isSelectedForSummary: newMeal.mealOption.isSelectedForSummary || true
         },
-        totalNutrition,
+        totalNutrition: totalNutrition || { calories: 0, protein: 0, carbs: 0, fat: 0 },
         createdAt: serverTimestamp(),
         usageCount: 0,
         lastUsedDate: serverTimestamp()
@@ -229,7 +242,7 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
       const createdMeal: SavedMeal = {
         ...newMeal,
         id: docRef.id,
-        imageUrl: imageUrl || undefined,
+        imageUrl: imageUrl || null, // Siempre usar null en lugar de undefined
         totalNutrition,
         createdAt: newMealData.createdAt,
         lastUsedDate: newMealData.lastUsedDate
@@ -257,9 +270,13 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
         },
         createdAt: null,
         usageCount: 0,
-        lastUsedDate: null
+        lastUsedDate: null,
+        imageUrl: null
       });
       setImageUpload(null);
+      
+      // Cerrar modal después de crear con éxito
+      handleClose();
     } catch (err) {
       console.error('Error al crear comida:', err);
       setActionError('Error al crear comida');
@@ -765,20 +782,8 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
                               }
                             }}
                             style={{
-                              backgroundColor: 
-                              activeMeal.category === 'desayuno' ? '#FEE2E2' : // Light red
-                              activeMeal.category === 'mediaManana' ? '#FEF3C7' : // Light yellow
-                              activeMeal.category === 'almuerzo' ? '#DBEAFE' : // Light blue  
-                              activeMeal.category === 'lunchTarde' ? '#D1FAE5' : // Light green
-                              activeMeal.category === 'cena' ? '#EDE9FE' : // Light purple
-                              '#F3F4F6', // Light gray for general
-                              color:
-                              activeMeal.category === 'desayuno' ? '#991B1B' : // Dark red
-                              activeMeal.category === 'mediaManana' ? '#92400E' : // Dark yellow
-                              activeMeal.category === 'almuerzo' ? '#1E40AF' : // Dark blue
-                              activeMeal.category === 'lunchTarde' ? '#065F46' : // Dark green  
-                              activeMeal.category === 'cena' ? '#5B21B6' : // Dark purple
-                              '#4B5563' // Dark gray for general
+                              backgroundColor: categoryColors[activeMeal.category as keyof typeof categoryColors]?.light || categoryColors.general.light,
+                              color: categoryColors[activeMeal.category as keyof typeof categoryColors]?.dark || categoryColors.general.dark
                             }}
                             >
                             {Object.entries(categoryLabels).map(([value, label]) => (
@@ -786,20 +791,8 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
                                 key={value} 
                                 value={value}
                                 style={{
-                                  backgroundColor: 
-                                    value === 'desayuno' ? '#FEE2E2' : // Light red
-                                    value === 'mediaManana' ? '#FEF3C7' : // Light yellow
-                                    value === 'almuerzo' ? '#DBEAFE' : // Light blue
-                                    value === 'lunchTarde' ? '#D1FAE5' : // Light green
-                                    value === 'cena' ? '#EDE9FE' : // Light purple
-                                    '#F3F4F6', // Light gray
-                                  color: 
-                                    value === 'desayuno' ? '#991B1B' : // Dark red
-                                    value === 'mediaManana' ? '#92400E' : // Dark yellow
-                                    value === 'almuerzo' ? '#1E40AF' : // Dark blue
-                                    value === 'lunchTarde' ? '#065F46' : // Dark green
-                                    value === 'cena' ? '#5B21B6' : // Dark purple
-                                    '#4B5563' // Dark gray
+                                  backgroundColor: categoryColors[value as keyof typeof categoryColors]?.light || categoryColors.general.light,
+                                  color: categoryColors[value as keyof typeof categoryColors]?.dark || categoryColors.general.dark
                                 }}
                               >
                                 {label}
@@ -809,26 +802,14 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
                             <div 
                             className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full"
                             style={{
-                              backgroundColor:
-                              activeMeal.category === 'desayuno' ? '#991B1B' : // Dark red
-                              activeMeal.category === 'mediaManana' ? '#92400E' : // Dark yellow 
-                              activeMeal.category === 'almuerzo' ? '#1E40AF' : // Dark blue
-                              activeMeal.category === 'lunchTarde' ? '#065F46' : // Dark green
-                              activeMeal.category === 'cena' ? '#5B21B6' : // Dark purple
-                              '#4B5563' // Dark gray
+                              backgroundColor: categoryColors[activeMeal.category as keyof typeof categoryColors]?.dark || categoryColors.general.dark
                             }}
                             ></div>
                           <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
                             <ChevronDown 
                               className="h-4 w-4" 
                               style={{
-                                color: 
-                                  activeMeal.category === 'desayuno' ? '#991B1B' : // Dark red
-                                  activeMeal.category === 'mediaManana' ? '#92400E' : // Dark yellow
-                                  activeMeal.category === 'almuerzo' ? '#1E40AF' : // Dark blue
-                                  activeMeal.category === 'lunchTarde' ? '#065F46' : // Dark green
-                                  activeMeal.category === 'cena' ? '#5B21B6' : // Dark purple
-                                  '#4B5563' // Dark gray for general
+                                color: categoryColors[activeMeal.category as keyof typeof categoryColors]?.dark || categoryColors.general.dark
                               }} 
                             />
                           </div>
