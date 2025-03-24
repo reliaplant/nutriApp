@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import jsPDF from 'jspdf';
-import { Meal } from '../meals';
+import { Meal } from '@/app/consulta/components/meals';
 import { Patient, Consultation } from '@/app/service/firebase';
 import { Printer } from 'lucide-react';
 import moment from 'moment';
@@ -104,7 +104,12 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       };
       
       // Función para verificar espacio disponible y crear nueva página si es necesario
-      const checkAndAddNewPage = (requiredSpace) => {
+      // Define an interface for the function
+      interface PageSpaceChecker {
+        (requiredSpace: number): boolean;
+      }
+      
+      const checkAndAddNewPage: PageSpaceChecker = (requiredSpace: number): boolean => {
         if (yPos + requiredSpace > pageHeight - 20) {
           addFooter();
           doc.addPage();
@@ -303,10 +308,15 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         
         if (selectedOption.content) {
           const contentLines = doc.splitTextToSize(selectedOption.content, contentWidth);
-          contentLines.forEach(line => {
+            interface ContentLine {
+            line: string;
+            yPos: number;
+            }
+
+            contentLines.forEach((line: string): void => {
             doc.text(line, margin, yPos);
             yPos += 5;
-          });
+            });
           yPos += 5;
         }
         
@@ -389,10 +399,16 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9);
           
-          instructionsLines.forEach(line => {
+            interface Line {
+            text: string;
+            x: number;
+            y: number;
+            }
+            
+            instructionsLines.forEach((line: string) => {
             doc.text(line, margin, yPos);
             yPos += 5;
-          });
+            });
           yPos += 3;
         }
         
@@ -427,7 +443,12 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
         
-        notesLines.forEach(line => {
+        interface NotesLine {
+            text: string;
+            yPosition: number;
+        }
+
+        notesLines.forEach((line: string): void => {
           doc.text(line, margin + 3, yPos);
           yPos += 5;
         });
