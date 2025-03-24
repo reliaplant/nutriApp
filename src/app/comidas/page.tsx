@@ -28,17 +28,17 @@ export interface SavedMeal {
   imageUrl?: string;
 }
 
-// Categorías disponibles para las comidas
-export const categoryLabels: Record<string, string> = {
-  general: 'General',
-  desayuno: 'Desayuno',
-  mediaManana: 'Media Mañana',
-  almuerzo: 'Almuerzo',
-  lunchTarde: 'Lunch de Tarde',
-  cena: 'Cena',
-};
-
 export default function SavedMealsPage() {
+  // Definir categoryLabels dentro del componente
+  const categoryLabels = {
+    'desayuno': 'Desayuno',
+    'mediaManana': 'Media Mañana',
+    'almuerzo': 'Almuerzo',
+    'lunchTarde': 'Lunch Tarde',
+    'cena': 'Cena',
+    'general': 'General'
+  };
+
   // Estados
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -412,7 +412,7 @@ export default function SavedMealsPage() {
                         
                         return (
                           <span className={`text-xs ${bg} ${text} px-2 py-0.5 rounded`}>
-                            {categoryLabels[meal.category] || meal.category || 'General'}
+                            {categoryLabels[meal.category as keyof typeof categoryLabels] || meal.category || 'General'}
                           </span>
                         );
                       })()}
