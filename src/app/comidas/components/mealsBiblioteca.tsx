@@ -153,14 +153,14 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
       // Subir imagen si hay una nueva
       let imageUrl = editingMeal.imageUrl;
       if (imageUpload) {
-        imageUrl = await uploadImage();
+        imageUrl = (await uploadImage()) ?? undefined;
       }
       
       const mealRef = doc(db, `users/${user.uid}/savedMealOptions`, editingMeal.id);
       await updateDoc(mealRef, {
         name: editingMeal.name,
         category: editingMeal.category,
-        imageUrl,
+        imageUrl: imageUrl || undefined,
         mealOption: {
           content: editingMeal.mealOption.content,
           instructions: editingMeal.mealOption.instructions,
@@ -207,7 +207,7 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
       const newMealData = {
         name: newMeal.name,
         category: newMeal.category,
-        imageUrl,
+        imageUrl: imageUrl || undefined,
         mealOption: {
           content: newMeal.mealOption.content,
           instructions: newMeal.mealOption.instructions,
@@ -229,7 +229,7 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
       const createdMeal: SavedMeal = {
         ...newMeal,
         id: docRef.id,
-        imageUrl,
+        imageUrl: imageUrl || undefined,
         totalNutrition,
         createdAt: newMealData.createdAt,
         lastUsedDate: newMealData.lastUsedDate
@@ -675,9 +675,9 @@ const MealsBiblioteca: React.FC<MealsBibliotecaProps> = ({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (isEditModalOpen && editingMeal) {
-                                  setEditingMeal({...editingMeal, imageUrl: null});
+                                  setEditingMeal({...editingMeal, imageUrl: undefined});
                                 } else if (isCreateModalOpen) {
-                                  setNewMeal({...newMeal, imageUrl: null});
+                                  setNewMeal({...newMeal, imageUrl: undefined});
                                 }
                               }}
                               className="absolute top-2 right-2 p-1.5 bg-gray-800 hover:bg-gray-500 rounded-full text-white transition-colors"
