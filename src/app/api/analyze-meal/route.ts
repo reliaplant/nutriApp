@@ -84,6 +84,10 @@ Ejemplo JSON para "huevos con pan":
     console.log('Respuesta OpenAI:', responseContent);
 
     try {
+      if (!responseContent) {
+        return NextResponse.json({ error: "No se recibió respuesta del análisis" }, { status: 500 });
+      }
+      
       const parsedResponse = JSON.parse(responseContent);
       if (parsedResponse?.ingredients?.length > 0) {
         return NextResponse.json(parsedResponse.ingredients);
