@@ -22,7 +22,7 @@ import {
   doc as firestoreDoc,
   getFirestore 
 } from 'firebase/firestore';
-import { app } from '@/app/service/firebase';
+import { app } from '@/app/shared/firebase';
 
 // Definir una interfaz para los documentos
 export interface PatientDocument {

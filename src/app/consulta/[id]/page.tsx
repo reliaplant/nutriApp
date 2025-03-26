@@ -12,7 +12,7 @@ import moment from 'moment';
 import Notas from '../components/notas';
 import Meals, { Meal } from '../components/meals';
 import NutritionalSummary from '../components/NutritionalSummary';
-import { patientService, consultationService, authService, Patient, Consultation } from '@/app/service/firebase';
+import { patientService, consultationService, authService, Patient, Consultation } from '@/app/shared/firebase';
 
 export default function CrearPlan() {
   // Obtener IDs de paciente y consulta

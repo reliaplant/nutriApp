@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { auth, authService } from '../service/firebase';
+import { auth, authService } from '../shared/firebase';
 import Link from 'next/link';
 
 export default function LoginPage() {

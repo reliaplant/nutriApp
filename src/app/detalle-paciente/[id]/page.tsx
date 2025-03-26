@@ -9,8 +9,10 @@ import DatosPaciente from '@/app/detalle-paciente/components/datosPaciente';
 import Consultas from '@/app/detalle-paciente/components/consultas';
 import Evolucion from '@/app/detalle-paciente/components/evolucion';
 import Documentos, { PatientDocument } from '@/app/detalle-paciente/components/documentos';
-import { patientService, consultationService } from '@/app/service/firebase';
-import { ref, storage } from '@/app/service/firebase';
+import { patientService, consultationService } from '@/app/shared/firebase';
+import { ref, storage } from '@/app/shared/firebase';
+import TrackingLinks from '../components/tracking-links';
+import TrackingSummary from '../components/tracking-summary';
 
 // Importar estas bibliotecas adicionales al inicio del archivo
 import {
@@ -284,6 +286,8 @@ const PatientDetailPage = () => {
                                     }}
                                 />
 
+                                <TrackingSummary patientId={patient.id} />
+
                                 <Evolucion
                                     patient={patient}
                                     weightHistory={weightHistory}
@@ -299,6 +303,8 @@ const PatientDetailPage = () => {
                                         onDocumentDeleted={handleDocumentDeleted}
                                     />
                                 </div>
+
+                                <TrackingLinks patientId={params.id} />
                             </>
                         ) : (
                             <div className="bg-white p-6 mb-4 border border-gray-300 radius shadow-md">

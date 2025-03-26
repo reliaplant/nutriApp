@@ -28,7 +28,7 @@ export interface NutritionUser {
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { authService, db, storage } from '@/app/service/firebase';
+import { authService, db, storage } from '@/app/shared/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';

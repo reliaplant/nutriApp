@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Patient, patientService, authService } from '@/app/service/firebase';
+import { patientService, authService } from '@/app/shared/firebase';
+import { Patient } from '@/app/shared/interfaces';
 
 interface PatientModalProps {
   isOpen: boolean;
@@ -26,24 +27,13 @@ const PatientModal: React.FC<PatientModalProps> = ({ isOpen, onClose, onPatientC
       return;
     }
 
-    const currentUser = authService.getCurrentUser();
-    if (!currentUser) {
-      setError('Debes iniciar sesión para crear un paciente');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
     
     try {
-      // Create basic patient with name, default status and nutritionist ID
-      const newPatient: Patient = {
-        name: patientName.trim(),
-        status: 'active',
-        nutritionistId: currentUser.uid,
-      };
-      
-      const patientId = await patientService.createPatient(newPatient);
+      // Ya no necesitamos crear un objeto Patient aquí,
+      // simplemente usar el método actualizado de patientService
+      const patientId = await patientService.createPatient(patientName.trim());
       
       setPatientName('');
       onPatientCreated();

@@ -7,7 +7,7 @@ import { Dialog } from '@headlessui/react';
 import { toast } from 'react-hot-toast';
 
 // Importaciones correctas del servicio firebase
-import { db, authService } from '@/app/service/firebase';
+import { db, authService } from '@/app/shared/firebase';
 
 // Tipos
 interface Ingredient {

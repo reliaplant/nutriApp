@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   collection, query, orderBy, getDocs, doc, Timestamp
 } from 'firebase/firestore';
-import { db, authService } from '@/app/service/firebase';
+import { db, authService } from '@/app/shared/firebase';
 import { Search, ArrowDown, ArrowUp, Pencil, Trash2, PlusCircle } from 'lucide-react';
 import { MealOption } from '@/app/consulta/components/meals';
 import MealsBiblioteca from './components/mealsBiblioteca';

@@ -14,7 +14,7 @@ import {
   Timestamp,
   orderBy,
   setDoc,
-  increment  // <-- Añadir esta importación
+  increment
 } from "firebase/firestore";
 import { getStorage } from 'firebase/storage';
 import { 
@@ -36,6 +36,10 @@ import {
   deleteObject,
   listAll
 } from 'firebase/storage';
+
+// Importar la interfaz Patient desde interfaces.ts
+import { Patient, DailyTracking } from './interfaces';
+import { limit } from "firebase/firestore";
 
 // Export the storage functions so they can be used elsewhere
 export { ref, uploadBytes, getDownloadURL, deleteObject, listAll };
@@ -61,23 +65,8 @@ setPersistence(auth, browserLocalPersistence).catch(error => {
   console.error("Error setting auth persistence:", error);
 });
 
-// Patient type definition based on detalle-paciente
-export interface Patient {
-  id?: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  birthDate?: string;
-  height?: number; // en cm
-  currentWeight?: number; // en kg
-  gender?: 'male' | 'female' | 'other';
-  country?: string;
-  status: 'active' | 'discharged' | 'lost';
-  nextAppointmentDate?: string | null;
-  createdAt?: Timestamp;
-  nutritionistId: string; // Added field to associate patient with nutritionist
-  photoUrl?: string; // Add this field to support patient photos
-}
+// Eliminar la definición duplicada de Patient
+// export interface Patient { ... } - ELIMINAR ESTO
 
 // Definición del tipo para consultas
 export interface Consultation {
@@ -220,18 +209,22 @@ export const authService = {
 
 // CRUD operations for patients
 export const patientService = {
-  // Create a new patient
-  async createPatient(patient: Patient): Promise<string> {
+  // Create a new patient with only name required
+  async createPatient(name: string): Promise<string> {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) {
       throw new Error("Debes iniciar sesión para crear un paciente");
     }
     
-    const patientData = {
-      ...patient,
-      nutritionistId: currentUser.uid, // Always associate with current user
+    // Crear un objeto que cumpla con los campos requeridos de Patient
+    const patientData: Omit<Patient, 'id'> = {
+      name,
+      nutritionistId: currentUser.uid,
+      status: 'active',
+      gender: 'other',
       createdAt: serverTimestamp(),
     };
+    
     const docRef = await addDoc(collection(db, "patients"), patientData);
     return docRef.id;
   },
@@ -293,7 +286,7 @@ export const patientService = {
         throw new Error("No tienes permiso para acceder a este paciente");
       }
       
-      return { id: docSnap.id, ...patientData };
+      return { ...patientData, id: docSnap.id };
     } else {
       return null;
     }
@@ -410,7 +403,7 @@ export const patientService = {
 
 // CRUD operations para consultas
 export const consultationService = {
-  // Crear una nueva consulta (con verificación de seguridad)
+  // Crear una nueva consulta (con verificación de seguridad y actualización de nextAppointmentDate)
   async createConsultation(consultation: Consultation): Promise<string> {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) {
@@ -432,14 +425,30 @@ export const consultationService = {
     
     const consultationData = {
       ...consultation,
-      nutritionistId: currentUser.uid, // Also add nutritionist ID to consultations
+      nutritionistId: currentUser.uid,
       createdAt: serverTimestamp(),
     };
     
+    // Crear la consulta
     const docRef = await addDoc(
       collection(db, `patientConsultas/${consultation.patientId}/consultas`), 
       consultationData
     );
+    
+    // Si es una consulta programada (status: 'scheduled'), actualizar el nextAppointmentDate del paciente
+    if (consultation.status === 'scheduled') {
+      try {
+        // Actualizar el campo nextAppointmentDate del paciente
+        await updateDoc(patientRef, {
+          nextAppointmentDate: consultation.date,
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Error al actualizar la próxima cita del paciente:", error);
+        // No fallamos la transacción completa si esto falla
+      }
+    }
+    
     return docRef.id;
   },
 
@@ -475,14 +484,186 @@ export const consultationService = {
     await updateDoc(consultationRef, consultationData);
   },
 
-  // Eliminar una consulta
+  // 1. Arreglar ruta para deleteConsultation
   async deleteConsultation(patientId: string, consultationId: string): Promise<void> {
-    await deleteDoc(doc(db, `patientConsultas/${patientId}/consultas/${consultationId}`));
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para eliminar consultas");
+    }
+  
+    try {
+      console.log(`Eliminando consulta: patientId=${patientId}, consultationId=${consultationId}`);
+      
+      // IMPORTANTE: Usar la ruta correcta
+      // Anteriormente usabas: patientConsultas/${patientId}/consultas
+      // Verifica cuál es la ruta correcta en tu Firestore
+      const consultationRef = doc(db, "patients", patientId, "consultas", consultationId);
+      
+      // Log para verificar la ruta
+      console.log(`Ruta de consulta: patients/${patientId}/consultas/${consultationId}`);
+      
+      const consultationSnap = await getDoc(consultationRef);
+      
+      if (!consultationSnap.exists()) {
+        // Intentar con la otra ruta posible como fallback
+        const altConsultationRef = doc(db, `patientConsultas/${patientId}/consultas/${consultationId}`);
+        console.log(`Intentando ruta alternativa: patientConsultas/${patientId}/consultas/${consultationId}`);
+        
+        const altConsultationSnap = await getDoc(altConsultationRef);
+        
+        if (!altConsultationSnap.exists()) {
+          console.error(`Consulta no encontrada en ninguna ruta: ${consultationId}`);
+          throw new Error("Consulta no encontrada");
+        }
+        
+        // Usar la ruta alternativa si la consulta existe allí
+        console.log("Usando ruta alternativa para eliminar");
+        const consultationData = altConsultationSnap.data() as Consultation;
+        await deleteDoc(altConsultationRef);
+        
+        // Actualizar nextAppointmentDate si es necesario
+        if (consultationData.status === 'scheduled') {
+          updateNextAppointmentDate(patientId);
+        }
+        
+        return;
+      }
+      
+      // Continuar con la primera ruta si existe
+      const consultationData = consultationSnap.data() as Consultation;
+      await deleteDoc(consultationRef);
+      
+      // Actualizar nextAppointmentDate si es una consulta programada
+      if (consultationData.status === 'scheduled') {
+        updateNextAppointmentDate(patientId);
+      }
+    } catch (error) {
+      console.error("Error al eliminar consulta:", error);
+      throw error;
+    }
   },
   
+  // Función de ayuda para actualizar nextAppointmentDate
+  async updateNextAppointmentDate(patientId: string): Promise<void> {
+    try {
+      const patientRef = doc(db, "patients", patientId);
+      
+      // Intentar primero con la ruta "patients/{patientId}/consultas"
+      let nextConsultationsQuery = query(
+        collection(db, "patients", patientId, "consultas"),
+        where("status", "==", "scheduled"),
+        orderBy("date", "asc"),
+        limit(1)
+      );
+      
+      let nextConsultationsSnap = await getDocs(nextConsultationsQuery);
+      
+      // Si no hay resultados, probar con la ruta alternativa
+      if (nextConsultationsSnap.empty) {
+        nextConsultationsQuery = query(
+          collection(db, `patientConsultas/${patientId}/consultas`),
+          where("status", "==", "scheduled"),
+          orderBy("date", "asc"),
+          limit(1)
+        );
+        
+        nextConsultationsSnap = await getDocs(nextConsultationsQuery);
+      }
+      
+      if (nextConsultationsSnap.empty) {
+        // No hay más consultas programadas
+        console.log(`No hay más consultas programadas para el paciente ${patientId}`);
+        await updateDoc(patientRef, {
+          nextAppointmentDate: null,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // Hay otra consulta programada
+        const nextConsultation = nextConsultationsSnap.docs[0].data() as Consultation;
+        console.log(`Próxima consulta encontrada para el paciente ${patientId}: ${nextConsultation.date}`);
+        await updateDoc(patientRef, {
+          nextAppointmentDate: nextConsultation.date,
+          updatedAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.error("Error actualizando nextAppointmentDate:", error);
+      // No relanzamos el error para que no falle toda la operación
+    }
+  },
+
   // Marcar una consulta como completada
-  async completeConsultation(patientId: string, consultationId: string): Promise<void> {
-    await this.updateConsultation(patientId, consultationId, { status: 'completed' });
+  async completeConsultation(patientId: string, consultationId: string, weight?: number): Promise<void> {
+    const consultationRef = doc(db, `patientConsultas/${patientId}/consultas/${consultationId}`);
+    const consultationSnap = await getDoc(consultationRef);
+    
+    if (!consultationSnap.exists()) {
+      throw new Error("Consulta no encontrada");
+    }
+    
+    const updateData: Partial<Consultation> = {
+      status: 'completed'
+    };
+    
+    // Si se proporciona peso, actualizarlo
+    if (weight !== undefined) {
+      updateData.weight = weight;
+      
+      // También actualizar el peso actual del paciente
+      try {
+        const patientRef = doc(db, "patients", patientId);
+        await updateDoc(patientRef, {
+          currentWeight: weight,
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Error al actualizar el peso del paciente:", error);
+      }
+    }
+    
+    // Actualizar la consulta
+    await updateDoc(consultationRef, updateData);
+    
+    // Buscar si era la próxima cita y actualizar nextAppointmentDate
+    const consultationData = consultationSnap.data() as Consultation;
+    const patientRef = doc(db, "patients", patientId);
+    const patientSnap = await getDoc(patientRef);
+    
+    if (patientSnap.exists()) {
+      const patientData = patientSnap.data() as Patient;
+      
+      // Si esta consulta era la próxima cita programada
+      if (patientData.nextAppointmentDate === consultationData.date) {
+        try {
+          // Buscar la próxima consulta programada
+          const nextConsultationsQuery = query(
+            collection(db, `patientConsultas/${patientId}/consultas`),
+            where("status", "==", "scheduled"),
+            orderBy("date", "asc"),
+            limit(1)
+          );
+          
+          const nextConsultationsSnap = await getDocs(nextConsultationsQuery);
+          
+          if (nextConsultationsSnap.empty) {
+            // Si no hay más consultas programadas
+            await updateDoc(patientRef, {
+              nextAppointmentDate: null,
+              updatedAt: serverTimestamp()
+            });
+          } else {
+            // Si hay otra consulta programada
+            const nextConsultation = nextConsultationsSnap.docs[0].data() as Consultation;
+            await updateDoc(patientRef, {
+              nextAppointmentDate: nextConsultation.date,
+              updatedAt: serverTimestamp()
+            });
+          }
+        } catch (error) {
+          console.error("Error al actualizar la próxima cita del paciente:", error);
+        }
+      }
+    }
   }
 };
 
@@ -613,5 +794,139 @@ export const savedMealService = {
       usageCount: increment(1),
       lastUsedDate: serverTimestamp()
     });
+  }
+};
+async function updateNextAppointmentDate(patientId: string): Promise<void> {
+  try {
+    const patientRef = doc(db, "patients", patientId);
+    
+    // Try first with the "patients/{patientId}/consultas" path
+    let nextConsultationsQuery = query(
+      collection(db, "patients", patientId, "consultas"),
+      where("status", "==", "scheduled"),
+      orderBy("date", "asc"),
+      limit(1)
+    );
+    
+    let nextConsultationsSnap = await getDocs(nextConsultationsQuery);
+    
+    // If no results, try with alternative path
+    if (nextConsultationsSnap.empty) {
+      nextConsultationsQuery = query(
+        collection(db, `patientConsultas/${patientId}/consultas`),
+        where("status", "==", "scheduled"),
+        orderBy("date", "asc"),
+        limit(1)
+      );
+      
+      nextConsultationsSnap = await getDocs(nextConsultationsQuery);
+    }
+    
+    if (nextConsultationsSnap.empty) {
+      // No more scheduled consultations
+      await updateDoc(patientRef, {
+        nextAppointmentDate: null,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      // There is another scheduled consultation
+      const nextConsultation = nextConsultationsSnap.docs[0].data() as Consultation;
+      await updateDoc(patientRef, {
+        nextAppointmentDate: nextConsultation.date,
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.error("Error updating nextAppointmentDate:", error);
+    // Not throwing the error to avoid failing the entire operation
+  }
+}
+// Add 'limit' to your existing firebase/firestore imports at the top of the file:
+
+// Servicio para manejar los registros diarios de los pacientes
+export const dailyTrackingService = {
+  async createTracking(tracking: DailyTracking): Promise<string> {
+    try {
+      const trackingData = {
+        ...tracking,
+        createdAt: serverTimestamp(),
+      };
+      
+      // Validación básica
+      if (!tracking.patientId) {
+        throw new Error("ID de paciente requerido");
+      }
+      
+      // Comprobamos que el paciente existe antes de guardar
+      const patientRef = doc(db, "patients", tracking.patientId);
+      const patientSnap = await getDoc(patientRef);
+      
+      if (!patientSnap.exists()) {
+        throw new Error("Paciente no encontrado");
+      }
+      
+      // Guardamos sin validar si el usuario que guarda tiene permisos
+      const docRef = await addDoc(
+        collection(db, `patients/${tracking.patientId}/tracking`), 
+        trackingData
+      );
+      
+      console.log(`Tracking guardado con ID: ${docRef.id}`);
+      return docRef.id;
+    } catch (err) {
+      console.error("Error al crear tracking:", err);
+      throw err;
+    }
+  },
+  
+  async getTrackingsByPatient(patientId: string): Promise<DailyTracking[]> {
+    // Aquí sí mantenemos las reglas de seguridad para los nutricionistas
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para ver seguimientos");
+    }
+    
+    const q = query(
+      collection(db, `patients/${patientId}/tracking`),
+      orderBy('date', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as DailyTracking));
+  },
+
+  // Verificar si un paciente existe por ID (sin validaciones adicionales)
+  async checkPatientExists(patientId: string): Promise<boolean> {
+    try {
+      const patientRef = doc(db, "patients", patientId);
+      const docSnap = await getDoc(patientRef);
+      return docSnap.exists();
+    } catch (error) {
+      console.error("Error checking patient:", error);
+      return false;
+    }
+  },
+  
+  // Obtener nombre del paciente sin validación de seguridad
+  async getPatientName(patientId: string): Promise<string | null> {
+    try {
+      if (!patientId) return null;
+      
+      const patientRef = doc(db, "patients", patientId);
+      const docSnap = await getDoc(patientRef);
+      
+      if (docSnap.exists()) {
+        const patientData = docSnap.data();
+        return patientData?.name || null;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error al obtener nombre del paciente:", error);
+      return null;
+    }
   }
 };

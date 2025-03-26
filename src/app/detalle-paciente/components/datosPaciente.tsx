@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { format, parseISO, differenceInYears } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { storage } from '@/app/service/firebase';
+import { storage } from '@/app/shared/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 
@@ -235,7 +235,7 @@ const handleDeletePatient = async () => {
     console.log("Starting patient deletion process:", patient.id);
     
     // Import necessary services directly
-    const { patientService, consultationService, storage, ref, deleteObject, listAll } = await import('@/app/service/firebase');
+    const { patientService, consultationService, storage, ref, deleteObject, listAll } = await import('@/app/shared/firebase');
     
     // 1. Delete consultations manually with proper service
     try {

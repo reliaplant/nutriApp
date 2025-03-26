@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Filter, Utensils } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
-import { db, authService } from '@/app/service/firebase';
+import { db, authService } from '@/app/shared/firebase';
 import { MealOption } from './meals';
+import { categoryLabels, categoryColors, MealCategory } from '@/app/comidas/constants';
 
 interface SavedMealOption {
   id: string;
   name: string;
-  category: string;
+  category: MealCategory;
   mealOption: MealOption;
   totalNutrition: {
     calories: number;
@@ -22,23 +23,13 @@ interface LoadSavedMealProps {
   onSelect: (option: MealOption) => void;
 }
 
-const categoryLabels: Record<string, string> = {
-  desayuno: 'Desayuno',
-  almuerzo: 'Almuerzo',
-  cena: 'Cena',
-  snack: 'Snack',
-  postre: 'Postre',
-  bebida: 'Bebida',
-  general: 'General',
-};
-
 const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [savedOptions, setSavedOptions] = useState<SavedMealOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<MealCategory | null>(null);
 
   // Cargar las opciones guardadas
   const loadSavedOptions = async () => {
@@ -89,6 +80,29 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
     loadSavedOptions();
   };
 
+  const handleSelectOption = (option: SavedMealOption) => {
+    console.log('Preparando opción para cargar:', option);
+    
+    const mealOption: MealOption = {
+      name: option.name, // Asegurarnos de pasar el nombre de la opción guardada
+      content: option.mealOption.content || '',
+      instructions: option.mealOption.instructions || '',
+      isSelectedForSummary: option.mealOption.isSelectedForSummary || false,
+      ingredients: option.mealOption.ingredients.map(ingredient => ({
+        name: ingredient.name || '',
+        quantity: Number(ingredient.quantity) || 0,
+        calories: Number(ingredient.calories) || 0,
+        protein: Number(ingredient.protein) || 0,
+        carbs: Number(ingredient.carbs) || 0,
+        fat: Number(ingredient.fat) || 0
+      }))
+    };
+
+    console.log('Opción procesada para cargar:', mealOption);
+    onSelect(mealOption);
+    setIsOpen(false);
+  };
+
   // Filtrar opciones según búsqueda y categoría
   const filteredOptions = savedOptions.filter(option => {
     const matchesSearch = option.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -96,8 +110,11 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
     return matchesSearch && matchesCategory;
   });
 
-  // Obtener categorías únicas para filtrar
-  const categories = Array.from(new Set(savedOptions.map(option => option.category)));
+  // Usar las categorías definidas en constants
+  const categories = Object.entries(categoryLabels).map(([id, name]) => ({
+    id: id as MealCategory,
+    name
+  }));
 
   return (
     <>
@@ -158,15 +175,15 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                     </button>
                     {categories.map(cat => (
                       <button
-                        key={cat}
-                        onClick={() => setSelectedCategory(cat)}
+                        key={cat.id}
+                        onClick={() => setSelectedCategory(cat.id)}
                         className={`px-2.5 py-1 rounded-full text-xs ${
-                          selectedCategory === cat
-                            ? 'bg-green-100 text-green-800 font-medium'
+                          selectedCategory === cat.id
+                            ? `${categoryColors[cat.id].bg} ${categoryColors[cat.id].text}`
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
-                        {categoryLabels[cat] || cat}
+                        {cat.name}
                       </button>
                     ))}
                   </div>
@@ -196,10 +213,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                     <div 
                       key={option.id}
                       className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md hover:border-green-200 transition-all cursor-pointer"
-                      onClick={() => {
-                        onSelect(option.mealOption);
-                        setIsOpen(false);
-                      }}
+                      onClick={() => handleSelectOption(option)}
                     >
                       <div className="p-3 border-b flex justify-between items-start">
                         <h4 className="font-medium text-gray-800 line-clamp-1 flex-1">{option.name}</h4>

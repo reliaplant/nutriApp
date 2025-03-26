@@ -2,24 +2,24 @@
 
 import React, { useState } from 'react';
 import { 
-  CheckmarkFilled, 
   TrashCan, 
   CalculatorCheck, 
-  Edit, 
   Strawberry, 
-  ChevronDown, 
-  ArrowUpRight 
+  ArrowUpRight,
+  Save 
 } from '@carbon/icons-react';
 import IngredientTypeahead, { Ingredient } from '@/app/consulta/components/IngredientTypeahead';
-import { ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import SaveMealOption from '@/app/consulta/components/saveMeals';
 import LoadSavedMeal from './LoadSavedMeal';
+import { categoryLabels, categoryColors, MealCategory } from '@/app/comidas/constants';
 
 export interface MealOption {
-  content: string;
+  name: string;     // Nombre corto de la receta
+  content: string;  // Descripción detallada
   ingredients: Ingredient[];
   isSelectedForSummary?: boolean;
-  instructions?: string; // Nuevo campo para instrucciones
+  instructions?: string; // Campo para instrucciones
 }
 
 export interface Meal {
@@ -28,6 +28,7 @@ export interface Meal {
   options: MealOption[];
   activeOptionIndex: number;
   selectedOptionForSummary: number;
+  category?: MealCategory;
 }
 
 type IngredientNumericField = 'quantity' | 'calories' | 'protein' | 'carbs' | 'fat';
@@ -36,6 +37,8 @@ type IngredientNumericField = 'quantity' | 'calories' | 'protein' | 'carbs' | 'f
 interface MealItemProps {
   meal: Meal;
   mealIndex: number;
+  meals: Meal[];
+  onMealsChange: (meals: Meal[]) => void;
   handleMealChange: (index: number, field: keyof Meal, value: string) => void;
   handleContentChange: (mealIndex: number, optionIndex: number, content: string) => void;
   setActiveOption: (mealIndex: number, optionIndex: number) => void;
@@ -54,13 +57,15 @@ interface MealItemProps {
 
 const MealItem: React.FC<MealItemProps> = ({ 
   meal, 
-  mealIndex, 
+  mealIndex,
+  meals,
+  onMealsChange,
   handleMealChange,
   handleContentChange,
   setActiveOption,
   setSelectedOptionForSummary,
   addMealOption,
-  removeMealOption,
+  removeMealOption,                          
   addIngredient,
   removeIngredient,
   handleIngredientNameChange,
@@ -70,379 +75,524 @@ const MealItem: React.FC<MealItemProps> = ({
   commonIngredients,
   handleInstructionsChange
 }) => {
-  // Aquí es seguro usar useState porque está en el nivel superior del componente
+  // Estados del componente
   const [isMinimized, setIsMinimized] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
 
   // Función para manejar la selección de una opción guardada
-  const handleSelectSavedOption = (savedOption: MealOption) => {
-    // Actualizamos la opción activa con la opción guardada
-    handleContentChange(mealIndex, meal.activeOptionIndex, savedOption.content || '');
+  const handleSelectSavedOption = async (savedOption: MealOption) => {
+    console.log('Iniciando carga de opción guardada:', savedOption);
     
-    // Si hay instrucciones, las actualizamos también
-    if (savedOption.instructions) {
-      handleInstructionsChange(mealIndex, meal.activeOptionIndex, savedOption.instructions);
-    }
-    
-    // Para los ingredientes, necesitamos primero eliminar los existentes
-    // y luego agregar los nuevos uno por uno
-    
-    // Esta línea causaba el error porque 'meals' no existe
-    // const updatedMeals = [...meals];
-    
-    // En lugar de manipular directamente el array, usamos las funciones proporcionadas por props
-    
-    // Primero, si hay ingredientes existentes, los eliminamos
-    // Esto asume que tienes acceso a los ingredientes actuales
-    if (meal.options[meal.activeOptionIndex].ingredients) {
-      // Clonamos el array para evitar problemas de mutación
-      const currentIngredients = [...meal.options[meal.activeOptionIndex].ingredients];
+    try {
+      // Crear una copia completa de las comidas
+      const updatedMeals = JSON.parse(JSON.stringify(meals));
       
-      // Eliminamos cada ingrediente existente
-      for (let i = currentIngredients.length - 1; i >= 0; i--) {
-        removeIngredient(mealIndex, meal.activeOptionIndex, i);
-      }
+      // Obtener el índice de la opción activa
+      const activeOptionIndex = updatedMeals[mealIndex].activeOptionIndex;
+      
+      // Actualizar el nombre de la comida
+      updatedMeals[mealIndex].name = savedOption.name;
+      
+      // Crear la nueva opción
+      const newOption: MealOption = {
+        name: savedOption.name,
+        content: savedOption.content || '',
+        instructions: savedOption.instructions || '',
+        isSelectedForSummary: updatedMeals[mealIndex].options[activeOptionIndex]?.isSelectedForSummary || false,
+        ingredients: savedOption.ingredients.map(ingredient => ({
+          name: ingredient.name || '',
+          quantity: Number(ingredient.quantity),
+          calories: Number(ingredient.calories),
+          protein: Number(ingredient.protein),
+          carbs: Number(ingredient.carbs),
+          fat: Number(ingredient.fat)
+        }))
+      };
+      
+      // Asignar la nueva opción
+      updatedMeals[mealIndex].options[activeOptionIndex] = newOption;
+      
+      // Forzar actualización del estado
+      onMealsChange(updatedMeals);
+
+    } catch (error) {
+      console.error('Error al cargar la opción guardada:', error);
     }
+  };
+
+  const getDefaultCategory = (): MealCategory => {
+    const hour = parseInt(meal.time?.split(':')[0] || '0');
+    if (hour >= 6 && hour < 10) return 'desayuno';
+    if (hour >= 10 && hour < 12) return 'mediaManana';
+    if (hour >= 12 && hour < 15) return 'almuerzo';
+    if (hour >= 15 && hour < 18) return 'lunchTarde';
+    if (hour >= 18 && hour < 23) return 'cena';
+    return 'general';
+  };
+
+  const handleNameChange = (mealIndex: number, optionIndex: number, name: string) => {
+    const updatedMeals = [...meals];
+    const meal = { ...updatedMeals[mealIndex] };
     
-    // Ahora agregamos los nuevos ingredientes
-    if (savedOption.ingredients && savedOption.ingredients.length > 0) {
-      savedOption.ingredients.forEach(ingredient => {
-        // Usamos la función addIngredient proporcionada como prop
-        addIngredient(mealIndex, meal.activeOptionIndex, ingredient);
+    // Actualizar tanto el nombre de la comida como el nombre de la opción
+    meal.name = name; // Añadir esta línea para actualizar el nombre de la comida
+    
+    const options = [...meal.options];
+    options[optionIndex] = { ...options[optionIndex], name };
+    meal.options = options;
+    
+    updatedMeals[mealIndex] = meal;
+    onMealsChange(updatedMeals);
+  };
+
+  // Obtener la opción activa actualmente
+  const activeOption = meal.options[meal.activeOptionIndex] || { content: '', ingredients: [], name: '' };
+
+  // Objeto para generar tabla de IA (similar a mealsBiblioteca)
+  const generateTableFromAI = async () => {
+    if (!activeOption?.content) return;
+
+    try {
+      const response = await fetch('/api/analyze-meal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: activeOption.content
+        }),
       });
-    }
-    
-    // Si hay una propiedad isSelectedForSummary, actualizarla
-    if (savedOption.isSelectedForSummary !== undefined) {
-      // Solo actualizamos si la opción tiene isSelectedForSummary como true y aún no está seleccionada,
-      // o si es false y actualmente está seleccionada
-      if (savedOption.isSelectedForSummary !== meal.options[meal.activeOptionIndex].isSelectedForSummary) {
-        setSelectedOptionForSummary(mealIndex, meal.activeOptionIndex);
-      }
+
+      if (!response.ok) throw new Error('API request failed');
+
+      const ingredients = await response.json();
+      
+      const updatedMeals = [...meals];
+      const updatedMeal = { ...updatedMeals[mealIndex] };
+      const updatedOptions = [...updatedMeal.options];
+      updatedOptions[meal.activeOptionIndex] = { 
+        ...updatedOptions[meal.activeOptionIndex], 
+        ingredients: ingredients 
+      };
+      updatedMeal.options = updatedOptions;
+      updatedMeals[mealIndex] = updatedMeal;
+      
+      onMealsChange(updatedMeals);
+    } catch (error) {
+      console.error('Error generating table:', error);
     }
   };
 
   return (
-    <div className="border border-gray-300 bg-white rounded shadow-md overflow-hidden">
-      <div className={`p-6 py-4 ${isMinimized ? 'pb-0' : 'pb-2'}`}>
-
-        <div className={`flex justify-between items-center ${isMinimized ? 'mb-0' : 'mb-4'}`}>
-          {/* Display meal time and name */}
-          <div id={`display-meal-${mealIndex}`}
-            className="text-xl font-semibold cursor-pointer group relative flex items-center p-1 hover:bg-gray-100 rounded"
-            onClick={() => {
-              const editingMeal = document.getElementById(`editing-meal-${mealIndex}`);
-              const displayMeal = document.getElementById(`display-meal-${mealIndex}`);
-              if (editingMeal && displayMeal) {
-                editingMeal.classList.remove('hidden');
-                displayMeal.classList.add('hidden');
-              }
-            }}
-          >
-            <span>{meal.time ? `${meal.time} - ` : ''}{meal.name || 'Nueva Comida'}</span>
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 text-blue-500">
-              <Edit size={26} className="text-green50" />
-            </div>
-          </div>
-
-          {/* Edit fields that appear on click with same styling */}
-          <div id={`editing-meal-${mealIndex}`} className="hidden">
-            <div className="flex items-center">
-              <div className='flex items-center border border-gray-200 rounded'>
-                <input
-                  className="p-2 border-r border-gray-200 text-md font-semibold bg-gray-50 w-24"
-                  placeholder="HH:MM"
-                  value={meal.time}
-                  onChange={(e) => handleMealChange(mealIndex, "time", e.target.value)}
-                  list={`time-options-meal-${mealIndex}`}
-                  autoComplete="off"
-                />
-                <input
-                  className="p-2 text-md font-semibold bg-gray-50 flex-grow"
-                  placeholder="Nombre de la comida"
-                  value={meal.name}
-                  onChange={(e) => handleMealChange(mealIndex, "name", e.target.value)}
-                />
-              </div>
-              <button
-                className="ml-2 text-green-600 hover:text-green-800 rounded-full p-1 bg-gray-100 hover:bg-gray-200"
-                onClick={() => {
-                  document.getElementById(`editing-meal-${mealIndex}`)?.classList.add('hidden');
-                  document.getElementById(`display-meal-${mealIndex}`)?.classList.remove('hidden');
-                }}
-              >
-                <CheckmarkFilled size={24} className='cursor-pointer' />
-              </button>
-            </div>
-            <datalist id={`time-options-meal-${mealIndex}`}>
-              {Array.from({ length: 24 }, (_, hour) => [
-                `${hour.toString().padStart(2, '0')}:00`,
-                `${hour.toString().padStart(2, '0')}:30`
-              ]).flat().map((time) => (
-                <option key={time} value={time} />
-              ))}
-            </datalist>
-          </div>
-
-          <button onClick={() => removeMeal(mealIndex)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded cursor-pointer">
-            <TrashCan size={16} />
-          </button>
-        </div>
+    <div className="border border-gray-200 bg-white rounded-lg shadow-md overflow-hidden">
+      {/* Header: Categoría + Hora */}
+      <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+        <span className={`text-sm font-medium ${categoryColors[getDefaultCategory()].text}`}>
+          {categoryLabels[getDefaultCategory()]}
+          {meal.time && (
+            <>
+              <span className="text-gray-400 mx-2">•</span>
+              <span className="text-gray-600">{meal.time}</span>
+            </>
+          )}
+        </span>
+        
+        <button
+          className="text-emerald-600 hover:text-emerald-700 text-xs flex items-center cursor-pointer hover:bg-green-50 p-1.5 rounded"
+          onClick={() => setIsMinimized(!isMinimized)}
+        >
+          {isMinimized ? (
+            <>
+              <ChevronDown className="h-4 w-4 mr-1" />
+              Expandir
+            </>
+          ) : (
+            <>
+              <ChevronUp className="h-4 w-4 mr-1" />
+              Minimizar
+            </>
+          )}
+        </button>
       </div>
 
       {/* Options tabs */}
       {!isMinimized && (
-        <div className="">
-          <div className="pl-6 flex flex-row gap-2.5">
+        <div className="px-4 pt-3 pb-0 border-b border-gray-100">
+          <div className="flex flex-row gap-2 overflow-x-auto pb-3">
             {meal.options.map((option, optionIndex) => (
-              <div key={optionIndex} className="">
-                <button
-                  className={`border rounded-full flex flex-row gap-2 items-center px-4 py-2 text-sm focus:outline-none ${meal.activeOptionIndex === optionIndex
-                    ? 'text-white bg-green50'
-                    : 'border-gray-200 text-green60 bg-green10 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  onClick={() => setActiveOption(mealIndex, optionIndex)}
-                >
-                  Opción {optionIndex + 1} <span className='px-0.5'>|</span> {option.ingredients.reduce((sum, ingredient) => sum + (ingredient.calories || 0), 0).toFixed(0)} kcal
-                  {option.isSelectedForSummary && (
-                    <CalculatorCheck
-                      size={16}
-                      className={meal.activeOptionIndex === optionIndex ? "text-white" : "text-green60"}
-                    />
-                  )}
-                </button>
-              </div>
+              <button
+                key={optionIndex}
+                className={`flex items-center px-4 py-1.5 text-sm font-medium rounded-full border transition-all ${
+                  meal.activeOptionIndex === optionIndex
+                    ? 'bg-green-600 text-white border-green-700'
+                    : 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100'
+                }`}
+                onClick={() => setActiveOption(mealIndex, optionIndex)}
+              >
+                Opción {optionIndex + 1} 
+                <span className="mx-1.5 opacity-60">|</span> 
+                <span>
+                  {option.ingredients.reduce((sum, ingredient) => sum + (Number(ingredient.calories || 0) * Number(ingredient.quantity || 0) / 100), 0).toFixed(0)} kcal
+                </span>
+                {option.isSelectedForSummary && (
+                  <CalculatorCheck
+                    size={16}
+                    className={`ml-2 ${meal.activeOptionIndex === optionIndex ? "text-white" : "text-green-700"}`}
+                  />
+                )}
+              </button>
             ))}
 
-            <button onClick={() => addMealOption(mealIndex)}
-              className="rounded-full border-gray-200 border hover:bg-gray-100 cursor-pointer text-gray70 text-xs px-3 py-2 rounded flex items-center hover:bg-gray20">
-              Añadir opción
+            <button 
+              onClick={() => addMealOption(mealIndex)}
+              className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-full border border-gray-200 flex items-center"
+            >
+              + Añadir opción
             </button>
           </div>
         </div>
       )}
 
-      {/* Active option content */}
-      <div className="p-6">
-        {/* Controls for option management */}
-        {meal.options.length > 0 && !isMinimized && (
-            <div className="flex gap-4 items-center mb-4">
-            <div className="flex items-center bg-gray10 p-1.5 px-2 rounded-lg hover:bg-green20 transition-colors">
-              <div className="relative inline-flex items-center cursor-pointer">
-              <input
-              type="checkbox"
-              id={`use-for-summary-${mealIndex}-${meal.activeOptionIndex}`}
-              checked={meal.options[meal.activeOptionIndex]?.isSelectedForSummary || false}
-              onChange={() => setSelectedOptionForSummary(mealIndex, meal.activeOptionIndex)}
-              className="sr-only peer"
+      {/* Content section */}
+      {!isMinimized && (
+        <div className="p-6">
+          {/* Controls and nutrition summary */}
+          {meal.options.length > 0 && (
+            <div className="flex gap-3 items-center mb-5 flex-wrap">
+              {/* Switch para incluir en resumen nutricional */}
+              <div className="flex items-center bg-gray-50 p-1.5 px-2 rounded-lg hover:bg-green-50 transition-colors group">
+                <div className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id={`use-for-summary-${mealIndex}-${meal.activeOptionIndex}`}
+                    checked={meal.options[meal.activeOptionIndex]?.isSelectedForSummary || false}
+                    onChange={() => setSelectedOptionForSummary(mealIndex, meal.activeOptionIndex)}
+                    className="sr-only peer"
+                  />
+                  <label
+                    htmlFor={`use-for-summary-${mealIndex}-${meal.activeOptionIndex}`}
+                    className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white block cursor-pointer"
+                  ></label>
+                </div>
+                <label className="text-xs font-medium text-gray-700 ml-2 group-hover:text-green-700">
+                  Para resumen nutricional
+                </label>
+                <CalculatorCheck size={16} className="text-green-600 ml-1" />
+              </div>
+
+              {/* Botón para guardar la opción actual */}
+              <SaveMealOption 
+                mealName={meals[mealIndex].name || ''} // Asegurar que siempre hay un valor
+                option={{
+                  ...activeOption,
+                  name: meals[mealIndex].name || '' // Asegurar que siempre hay un valor
+                }}
+                onSaveSuccess={() => {
+                  alert('Opción de comida guardada correctamente');
+                }}
               />
-              <label
-              htmlFor={`use-for-summary-${mealIndex}-${meal.activeOptionIndex}`}
-              className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white block cursor-pointer"
-              ></label>
+
+              {/* Botón para cargar opción guardada */}
+              <LoadSavedMeal 
+                onSelect={(option) => {
+                  handleSelectSavedOption(option);
+                }}
+              />
+
+              {/* Eliminar opción actual si hay más de una */}
+              {meal.options.length > 1 && (
+                <button
+                  className="text-red-500 hover:text-red-700 text-xs flex items-center cursor-pointer hover:bg-red-50 p-2 rounded-lg"
+                  onClick={() => removeMealOption(mealIndex, meal.activeOptionIndex)}
+                >
+                  <TrashCan size={16} className="mr-1" />
+                  Eliminar opción
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Campos alineados con MealsBiblioteca */}
+          <div className="space-y-6">
+            {/* Información básica */}
+            <div className="flex flex-col md:flex-row gap-4 items-start">
+              {/* Nombre de la comida - FORZADO PARA QUE FUNCIONE */}
+              <div className="flex-grow">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la receta</label>
+                <input
+                  type="text"
+                  className="w-full p-2 h-10 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-500"
+                  value={meals[mealIndex].name}
+                  onChange={(e) => {
+                    // Modificar directamente el estado primario
+                    const newMeals = [...meals];
+                    newMeals[mealIndex].name = e.target.value;
+                    
+                    // También actualizar la opción activa para mantener consistencia
+                    const activeOptionIndex = newMeals[mealIndex].activeOptionIndex;
+                    newMeals[mealIndex].options[activeOptionIndex].name = e.target.value;
+                    
+                    // Actualizar estado
+                    onMealsChange(newMeals);
+                  }}
+                  placeholder="Ej: Pollo con arroz y vegetales"
+                />
               </div>
-              <label className="text-xs font-medium text-gray-700 ml-2">
-              Para resumen nutricional
-              </label>
-              <CalculatorCheck size={16} className="text-green60 ml-1" />
-            </div>
 
-            {/* Nuevo botón para guardar la opción actual */}
-            <SaveMealOption 
-              mealName={meal.name}
-              option={meal.options[meal.activeOptionIndex]}
-              onSaveSuccess={() => {
-                // Puedes mostrar alguna notificación o mensaje de éxito
-                alert('Opción de comida guardada correctamente');
-              }}
-            />
-
-            {/* Nuevo botón para cargar opción guardada */}
-            <LoadSavedMeal 
-              onSelect={(option) => {
-                handleSelectSavedOption(option);
-              }}
-            />
-
-            {meal.options.length > 1 && (
-              <button
-              className="text-red-500 hover:text-red-700 text-xs flex items-center cursor-pointer hover:bg-red-50 p-2 rounded-lg"
-              onClick={() => removeMealOption(mealIndex, meal.activeOptionIndex)}
-              >
-              <TrashCan size={16} className="mr-1 " />
-              Eliminar opción
-              </button>
-            )}
-            </div>
-        )}
-        {/* Show all options when minimized */}
-        {isMinimized && (
-          <div className=" mb-0">
-            {meal.options.map((option, idx) => (
-              <div
-                key={idx}
-                className={`mb-2 p-3 text-sm pr-8 rounded-lg flex items-center justify-between ${meal.activeOptionIndex === idx ? 'bg-gray10 ' : 'bg-gray10'
-                  }`}
-              >
-                <div className="flex-grow">
-                  <div className="flex items-center mb-1">
-                    <span className="text-sm font-medium mr-2">Opción {idx + 1}</span>
-                    {option.isSelectedForSummary && (
-                      <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full flex items-center">
-                        <CalculatorCheck size={14} className="mr-1" />
-                        Para resumen
-                      </span>
-                    )}
+              {/* Categoría */}
+              <div className="w-40">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                <div className="relative">
+                  <select
+                    className="w-full p-2 h-10 pl-8 appearance-none rounded-full shadow-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-opacity-50"
+                    value={meal.category || getDefaultCategory()}
+                    onChange={(e) => {
+                      const updatedMeals = [...meals];
+                      updatedMeals[mealIndex] = {
+                        ...updatedMeals[mealIndex],
+                        category: e.target.value as MealCategory
+                      };
+                      onMealsChange(updatedMeals);
+                    }}
+                    style={{
+                      backgroundColor: categoryColors[meal.category || getDefaultCategory()]?.light || categoryColors.general.light,
+                      color: categoryColors[meal.category || getDefaultCategory()]?.dark || categoryColors.general.dark
+                    }}
+                  >
+                    {Object.entries(categoryLabels).map(([value, label]) => (
+                      <option 
+                        key={value} 
+                        value={value}
+                        style={{
+                          backgroundColor: categoryColors[value as keyof typeof categoryColors]?.light || categoryColors.general.light,
+                          color: categoryColors[value as keyof typeof categoryColors]?.dark || categoryColors.general.dark
+                        }}
+                      >
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <div 
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full"
+                    style={{
+                      backgroundColor: categoryColors[meal.category || getDefaultCategory()]?.dark || categoryColors.general.dark
+                    }}
+                  ></div>
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                    <ChevronDown 
+                      className="h-4 w-4" 
+                      style={{
+                        color: categoryColors[meal.category || getDefaultCategory()]?.dark || categoryColors.general.dark
+                      }} 
+                    />
                   </div>
-                  <p className="text-gray-700">
-                    {option.content || 'Sin descripción'}
-                  </p>
-                </div>
-                <div className="text-right text-sm font-medium text-gray-500">
-                  {option.ingredients.reduce((sum, ingredient) => sum + (ingredient.calories || 0), 0).toFixed(0)} kcal
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
 
-        {/* Show full content when not minimized */}
-        {!isMinimized && (
-          <>
-            <div className="mt-8 mb-6">
-              <h3 className="text-sm mb-4 text-green60">Descripción</h3>
+            {/* Descripción */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
               <textarea
-                className="w-full p-4 py-2 border border-gray-200 rounded focus:shadow-sm focus:outline-none"
-                placeholder="Describe los alimentos que componen esta comida"
-                value={meal.options[meal.activeOptionIndex]?.content || ''}
+                className="w-full p-3 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-500"
+                value={activeOption.content || ''}
                 onChange={(e) => handleContentChange(mealIndex, meal.activeOptionIndex, e.target.value)}
+                placeholder="Describe los ingredientes y cantidades detalladamente..."
                 rows={2}
               />
             </div>
 
-            <div className="mt-4 mb-6">
+            {/* Instrucciones */}
+            <div>
               <div 
-                className="flex items-center cursor-pointer text-green60 hover:text-green-700" 
+                className="flex items-center cursor-pointer text-green-600 hover:text-green-700 mb-2" 
                 onClick={() => setShowInstructions(!showInstructions)}
               >
-                <h3 className="text-sm mr-2">Instrucciones de preparación</h3>
+                <h3 className="text-sm font-medium mr-2">Instrucciones de preparación</h3>
                 {showInstructions ? 
-                  <ChevronDown size={16} /> : 
-                  <ArrowUpRight size={16} />
+                  <ChevronDown className="h-4 w-4" /> : 
+                  <ArrowUpRight className="h-4 w-4" />
                 }
               </div>
               
               {showInstructions && (
                 <textarea
-                  className="w-full p-4 py-2 border border-gray-200 rounded mt-2 focus:shadow-sm focus:outline-none"
+                  className="w-full p-3 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-500"
                   placeholder="Añade instrucciones de preparación para esta comida"
-                  value={meal.options[meal.activeOptionIndex]?.instructions || ''}
+                  value={activeOption.instructions || ''}
                   onChange={(e) => handleInstructionsChange(mealIndex, meal.activeOptionIndex, e.target.value)}
                   rows={4}
                 />
               )}
             </div>
 
-            {/* Ingredients table */}
-            <div className="mt-2 flex justify-between items-center">
-              <h3 className="text-sm mb-2 text-green60">Ingredientes</h3>
-              <button onClick={() => addIngredient(mealIndex, meal.activeOptionIndex)}
-                className="rounded border-gray-200 border hover:bg-gray-100 cursor-pointer text-gray70 text-xs px-2 py-1 mb-2 rounded flex items-center hover:bg-gray20">
-                <Strawberry size={20} className="mr-2 text-teal50" />
-                Añadir ingrediente
-              </button>
-            </div>
+            {/* Ingredientes */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium text-gray-700">Ingredientes</h3>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => addIngredient(mealIndex, meal.activeOptionIndex)}
+                    className="bg-green-50 hover:bg-green-100 text-green-700 text-sm px-3 py-1 rounded-lg flex items-center"
+                  >
+                    <Strawberry size={16} className="mr-2" />
+                    Añadir ingrediente
+                  </button>
+                  <button 
+                    onClick={generateTableFromAI}
+                    className={`
+                        text-sm px-3 py-1 rounded-lg flex items-center relative group
+                        ${activeOption?.content 
+                            ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' 
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }
+                    `}
+                    disabled={!activeOption?.content}
+                  >
+                    {/* Icon */}
+                    <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        className="w-4 h-4 mr-2"
+                    >
+                        <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83" />
+                    </svg>
+                    Crear tabla con IA
+                    
+                    {/* Tooltip */}
+                    {!activeOption?.content && (
+                      <div className={`
+                        absolute bottom-full right-0 mb-2 
+                        w-60 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg 
+                        transition-opacity duration-200 pointer-events-none
+                        opacity-0 group-hover:opacity-100
+                      `}>
+                        La descripción no puede estar vacia 
+                        <div className="absolute top-full right-4 border-[6px] border-transparent border-t-gray-800" />
+                      </div>
+                    )}
+                  </button>
+                </div>
+              </div>
 
-            <div className="overflow-x-auto border border-gray-200 rounded">
-              <table className="min-w-full divide-y divide-gray-200 ">
-                <thead className="bg-green-50">
-                  <tr>
-                    {["Ingrediente", "Cant(g)", "Calorías", "Prot(g)", "Carbs(g)", "Grasas(g)", ""].map((header, i) => (
-                      <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {meal.options[meal.activeOptionIndex]?.ingredients.map((ingredient, ingredientIndex) => (
-                    <tr key={ingredientIndex} className="group">
-                      <td className="">
-                        <IngredientTypeahead
-                          value={ingredient.name}
-                          onChange={(value) => handleIngredientNameChange(mealIndex, ingredientIndex, value)}
-                          onSelectIngredient={(selectedIngredient) =>
-                            handleSelectIngredient(mealIndex, ingredientIndex, selectedIngredient)
-                          }
-                          ingredients={commonIngredients}
-                        />
-                      </td>
-                      {['quantity', 'calories', 'protein', 'carbs', 'fat'].map((field, idx) => (
-                        <td key={idx} className="px-3 ">
-                          {field === 'quantity' ? (
-                            <input
-                              className="w-16 pl-4 py-2 bg-gray10 group-hover:bg-gray-100 text-center text-sm"
-                              type="number"
-                              value={ingredient[field as keyof Ingredient]}
-                              onChange={(e) =>
-                                handleIngredientChange(
-                                  mealIndex,
-                                  ingredientIndex,
-                                  field as IngredientNumericField,
-                                  Number(e.target.value)
-                                )
-                              }
-                              step="1"
-                            />
-                          ) : (
-                            <span className="w-16 p-1 text-center text-sm block">
-                              {ingredient[field as keyof Ingredient]}
-                            </span>
-                          )}
-                        </td>
+              {/* Tabla de ingredientes */}
+              <div className="border border-gray-200 rounded-lg overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 relative">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {["Ingrediente", "Cant(g)", "Cal", "Prot(g)", "Carbs(g)", "Grasas(g)", ""].map((header, i) => (
+                        <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {header}
+                        </th>
                       ))}
-                      <td className="px-3">
-                        <TrashCan size={16} className="bg-gray300 text-blue90 cursor-pointer " onClick={() => removeIngredient(mealIndex, meal.activeOptionIndex, ingredientIndex)} />
-                      </td>
                     </tr>
-                  ))}
-                </tbody>
-
-                <tfoot className="bg-gray10">
-                  <tr>
-                    <td className="px-3 py-2 font-medium" colSpan={2}>Total:</td>
-                    {['calories', 'protein', 'carbs', 'fat'].map((field, idx) => (
-                      <td key={idx} className="px-3 py-2 font-medium">
-                        {meal.options[meal.activeOptionIndex]?.ingredients
-                          .reduce((sum, i) => sum + Number(i[field as keyof Ingredient]), 0)
-                          .toFixed(field === 'calories' ? 0 : 1)}
-                        {field !== 'calories' && 'g'}
-                      </td>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {activeOption.ingredients.map((ingredient, ingredientIndex) => (
+                      <tr key={ingredientIndex} className="hover:bg-gray-50">
+                        <td className="py-2 px-3 min-w-[180px] relative w-1/2" style={{ position: 'static' }}>
+                          <div className="relative">
+                            <IngredientTypeahead
+                              value={ingredient.name}
+                              onChange={(value) => handleIngredientNameChange(mealIndex, ingredientIndex, value)}
+                              onSelectIngredient={(selectedIngredient) =>
+                                handleSelectIngredient(mealIndex, ingredientIndex, selectedIngredient)
+                              }
+                              ingredients={commonIngredients}
+                            />
+                          </div>
+                        </td>
+                        
+                        {/* Cantidad (editable) */}
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-16 p-1 border border-gray-200 rounded text-center"
+                            type="number"
+                            value={ingredient.quantity === 0 ? '' : ingredient.quantity || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              // Use undefined for empty value to allow clearing the field
+                              const numValue = value === '' ? 0 : Number(value);
+                              handleIngredientChange(
+                                mealIndex,
+                                ingredientIndex,
+                                'quantity',
+                                numValue
+                              );
+                            }}
+                            step="1"
+                            min="0"
+                          />
+                        </td>
+                        
+                        {/* Valores calculados según la cantidad */}
+                        <td className="px-3 py-2 text-center">
+                          {Math.round((Number(ingredient.calories) * Number(ingredient.quantity)) / 100)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {((Number(ingredient.protein) * Number(ingredient.quantity)) / 100).toFixed(1)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {((Number(ingredient.carbs) * Number(ingredient.quantity)) / 100).toFixed(1)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {((Number(ingredient.fat) * Number(ingredient.quantity)) / 100).toFixed(1)}
+                        </td>
+                        
+                        {/* Botón eliminar */}
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            onClick={() => removeIngredient(mealIndex, meal.activeOptionIndex, ingredientIndex)} 
+                            className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded"
+                          >
+                            <TrashCan size={16} />
+                          </button>
+                        </td>
+                      </tr>
                     ))}
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
+                    {activeOption.ingredients.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-4 text-center text-gray-500 text-sm">
+                          No hay ingredientes. Añade uno para comenzar.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  
+                  {/* Total de nutrientes */}
+                  <tfoot className="bg-gray-50">
+                    <tr>
+                      <td className="px-3 py-2 font-medium" colSpan={2}>Total:</td>
+                      <td className="px-3 py-2 font-medium text-center">
+                        {Math.round(activeOption.ingredients
+                          .reduce((sum, i) => sum + (Number(i.calories || 0) * Number(i.quantity || 0) / 100), 0))}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-center">
+                        {activeOption.ingredients
+                          .reduce((sum, i) => sum + (Number(i.protein || 0) * Number(i.quantity || 0) / 100), 0)
+                          .toFixed(1)}g
+                      </td>
+                      <td className="px-3 py-2 font-medium text-center">
+                        {activeOption.ingredients
+                          .reduce((sum, i) => sum + (Number(i.carbs || 0) * Number(i.quantity || 0) / 100), 0)
+                          .toFixed(1)}g
+                      </td>
+                      <td className="px-3 py-2 font-medium text-center">
+                        {activeOption.ingredients
+                          .reduce((sum, i) => sum + (Number(i.fat || 0) * Number(i.quantity || 0) / 100), 0)
+                          .toFixed(1)}g
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
-          </>
-        )}
-      </div>
-      <button
-        className="mr-4 mb-3 ml-auto text-emerald-600 hover:text-emerald-700 text-xs flex items-center cursor-pointer hover:bg-green-50 p-2 rounded"
-        onClick={() => setIsMinimized(!isMinimized)}
-      >
-        {isMinimized ? (
-          <>
-            <ChevronDown size={16} className="mr-1" />
-            Expandir
-          </>
-        ) : (
-          <>
-            <ChevronUp size={16} className="mr-1" />
-            Minimizar
-          </>
-        )}
-      </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -460,6 +610,11 @@ const Meals: React.FC<MealsProps> = ({
   commonIngredients,
   onMealsChange
 }) => {
+  // Eliminamos el useEffect que crea comidas por defecto
+  // ya que lo hemos movido al componente padre
+  
+  console.log("Meals rendering with:", meals);
+
   // Funciones de manejo de meals
   const handleMealChange = (index: number, field: keyof Meal, value: string) => {
     const updatedMeals = [...meals];
@@ -473,7 +628,7 @@ const Meals: React.FC<MealsProps> = ({
       {
         name: '',
         time: '',
-        options: [{ content: '', ingredients: [], isSelectedForSummary: true }],
+        options: [{ name: '', content: '', ingredients: [], isSelectedForSummary: true }],
         activeOptionIndex: 0,
         selectedOptionForSummary: 0
       }
@@ -512,9 +667,19 @@ const Meals: React.FC<MealsProps> = ({
     const meal = { ...updatedMeals[mealIndex] };
     const options = [...meal.options];
     
+    // Desmarcar todas las opciones primero
+    options.forEach((option, idx) => {
+      options[idx] = { 
+        ...option, 
+        isSelectedForSummary: false 
+      };
+    });
+    
+    // Marcar la opción seleccionada (toggle)
+    const isCurrentlySelected = options[optionIndex].isSelectedForSummary;
     options[optionIndex] = { 
       ...options[optionIndex], 
-      isSelectedForSummary: !options[optionIndex].isSelectedForSummary 
+      isSelectedForSummary: !isCurrentlySelected
     };
     
     meal.options = options;
@@ -523,13 +688,18 @@ const Meals: React.FC<MealsProps> = ({
   };
 
   const addMealOption = (mealIndex: number) => {
-    // Implementación como antes
     const updatedMeals = [...meals];
     const meal = { ...updatedMeals[mealIndex] };
+    
+    // Añadir nueva opción
     meal.options = [
       ...meal.options,
-      { content: '', ingredients: [] }
+      { name: '', content: '', ingredients: [] }
     ];
+    
+    // Establecer la nueva opción como activa
+    meal.activeOptionIndex = meal.options.length - 1;
+    
     updatedMeals[mealIndex] = meal;
     onMealsChange(updatedMeals);
   };
@@ -551,39 +721,64 @@ const Meals: React.FC<MealsProps> = ({
   };
 
   const addIngredient = (mealIndex: number, optionIndex?: number, ingredientData?: Ingredient) => {
-    // Implementación como antes
+    // Fix: Don't access 'meal' before it's defined
+    console.log("Adding ingredient to meal", mealIndex, "option", optionIndex !== undefined ? optionIndex : "active option", "data:", ingredientData);
+    
     const updatedMeals = [...meals];
     const meal = { ...updatedMeals[mealIndex] };
     const options = [...meal.options];
-    const activeOption = { ...options[optionIndex !== undefined ? optionIndex : meal.activeOptionIndex] };
+    const activeOptionIndex = optionIndex !== undefined ? optionIndex : meal.activeOptionIndex;
     
-    activeOption.ingredients = [
-      ...activeOption.ingredients,
-      ingredientData || { name: '', quantity: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }
-    ];
+    console.log("Active option index:", activeOptionIndex);
     
-    options[optionIndex !== undefined ? optionIndex : meal.activeOptionIndex] = activeOption;
+    const activeOption = { ...options[activeOptionIndex] };
+    
+    // Asegurarse de que los valores numéricos son números y no undefined
+    const newIngredient: Ingredient = ingredientData ? {
+      name: ingredientData.name || '',
+      quantity: typeof ingredientData.quantity === 'number' ? ingredientData.quantity : 0,
+      calories: typeof ingredientData.calories === 'number' ? ingredientData.calories : 0,
+      protein: typeof ingredientData.protein === 'number' ? ingredientData.protein : 0,
+      carbs: typeof ingredientData.carbs === 'number' ? ingredientData.carbs : 0,
+      fat: typeof ingredientData.fat === 'number' ? ingredientData.fat : 0
+    } : {
+      name: '',
+      quantity: 0,
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0
+    };
+    
+    // Usar concat para crear un nuevo array en lugar de modificar el existente
+    activeOption.ingredients = activeOption.ingredients.concat(newIngredient);
+    
+    options[activeOptionIndex] = activeOption;
     meal.options = options;
     updatedMeals[mealIndex] = meal;
+    
+    console.log("Updated meals after adding ingredient:", updatedMeals);
     onMealsChange(updatedMeals);
   };
 
   const removeIngredient = (mealIndex: number, optionIndex: number, ingredientIndex: number) => {
-      // Implementación como antes
-      const updatedMeals = [...meals];
-      const meal = { ...updatedMeals[mealIndex] };
-      const options = [...meal.options];
-      const activeOption = { ...options[optionIndex] };
-      const ingredients = [...activeOption.ingredients];
-      
-      ingredients.splice(ingredientIndex, 1);
-      
-      activeOption.ingredients = ingredients;
-      options[optionIndex] = activeOption;
-      meal.options = options;
-      updatedMeals[mealIndex] = meal;
-      onMealsChange(updatedMeals);
-    };
+    console.log("Removing ingredient", ingredientIndex, "from meal", mealIndex, "option", optionIndex);
+    
+    const updatedMeals = [...meals];
+    const meal = { ...updatedMeals[mealIndex] };
+    const options = [...meal.options];
+    const activeOption = { ...options[optionIndex] };
+    
+    // Crear una nueva lista de ingredientes sin el que queremos eliminar
+    activeOption.ingredients = activeOption.ingredients.filter((_, idx) => idx !== ingredientIndex);
+    
+    options[optionIndex] = activeOption;
+    meal.options = options;
+    updatedMeals[mealIndex] = meal;
+    
+    console.log("Updated meals after removing ingredient:", updatedMeals);
+    onMealsChange(updatedMeals);
+  };
 
   const handleIngredientNameChange = (mealIndex: number, ingredientIndex: number, value: string) => {
     // Implementación como antes
@@ -661,13 +856,15 @@ const Meals: React.FC<MealsProps> = ({
   };
 
   return (
-    <div className="w-full p-4 flex flex-col gap-4 bg-gray10">
+    <div className="w-full p-4 flex flex-col gap-4 bg-gray-50">
       {/* Usar el componente MealItem para cada comida */}
       {meals.map((meal, mealIndex) => (
         <MealItem
           key={mealIndex}
           meal={meal}
           mealIndex={mealIndex}
+          meals={meals} // Agregar esta prop
+          onMealsChange={onMealsChange} // Agregar esta prop
           handleMealChange={handleMealChange}
           handleContentChange={handleContentChange}
           setActiveOption={setActiveOption}
@@ -686,13 +883,14 @@ const Meals: React.FC<MealsProps> = ({
       ))}
       
       {/* Botón para añadir nueva comida */}
-      <button onClick={addMeal}
-        className="rounded-full border-gray-200 border hover:bg-gray-100 cursor-pointer text-gray70 text-sm px-4 py-3 flex items-center justify-center hover:bg-gray20">
-        <Strawberry size={20} className="mr-2 text-teal50" />
+      <button 
+        onClick={addMeal}
+        className="bg-white rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer text-gray-600 text-sm px-4 py-3 flex items-center justify-center transition-colors shadow-sm"
+      >
+        <Strawberry size={20} className="mr-2 text-green-600" />
         Añadir Nueva Comida
       </button>
     </div>
   );
 };
-
 export default Meals;

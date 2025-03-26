@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
-import { Consultation, consultationService } from '@/app/service/firebase';
+import { Consultation, consultationService, db } from '@/app/shared/firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import CreateConsultation from './createConsultation';
 
 interface ConsultasProps {
   patientId: string;
@@ -19,19 +21,14 @@ const Consultas: React.FC<ConsultasProps> = ({
 }) => {
   const router = useRouter();
   const [consultations, setConsultations] = useState<Consultation[]>(initialConsultations);
-  const [showNewAppointmentForm, setShowNewAppointmentForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const [editingConsultationId, setEditingConsultationId] = useState<string | null>(null);
-  
-  const [formData, setFormData] = useState({
-    date: '',
-    time: ''
-  });
-
+  // Estados para modales y gestión de consultas
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [consultationToDelete, setConsultationToDelete] = useState<string | null>(null);
+  const [consultationToEdit, setConsultationToEdit] = useState<Consultation | null>(null);
 
   // Separate consultations into scheduled and completed
   const scheduledConsultations = consultations.filter(c => c.status === 'scheduled');
@@ -69,89 +66,22 @@ const Consultas: React.FC<ConsultasProps> = ({
     }
   };
 
-  const handleCreateConsultation = async () => {
-    if (!formData.date) {
-      setError('La fecha es obligatoria');
-      return;
-    }
-
-    if (!formData.time) {
-      setError('La hora es obligatoria');
-      return;
-    }
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const dateWithTime = `${formData.date}T${formData.time}:00`;
-      
-      const newConsultation: Consultation = {
-        patientId,
-        date: dateWithTime,
-        status: 'scheduled',
-        highlights: []
-      };
-      
-      const consultationId = await consultationService.createConsultation(newConsultation);
-      
-      const consultationWithId = {
-        ...newConsultation,
-        id: consultationId
-      };
-      
-      setConsultations(prev => [consultationWithId, ...prev]);
-      
-      setFormData({
-        date: '',
-        time: ''
-      });
-      
-      setShowNewAppointmentForm(false);
-    } catch (err) {
-      console.error('Error creating consultation:', err);
-      setError('Error al crear la consulta');
-    } finally {
-      setLoading(false);
+  const handleConsultationCreated = (newConsultation: Consultation) => {
+    if (consultationToEdit) {
+      // Si estábamos editando, actualizamos la consulta existente
+      setConsultations(prev => prev.map(c => 
+        c.id === newConsultation.id ? newConsultation : c
+      ));
+      setConsultationToEdit(null);
+    } else {
+      // Si era nueva, la añadimos al listado
+      setConsultations(prev => [newConsultation, ...prev]);
     }
   };
   
-  const handleEditConsultation = async (id: string) => {
-    if (!id || !formData.date || !formData.time) {
-      setError('Todos los campos son obligatorios');
-      return;
-    }
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const dateWithTime = `${formData.date}T${formData.time}:00`;
-      
-      const consultationToUpdate: Partial<Consultation> = {
-        patientId,
-        date: dateWithTime,
-        status: 'scheduled' as const,
-      };
-      
-      await consultationService.updateConsultation(patientId, id, consultationToUpdate);
-      
-      setConsultations(prev => prev.map(c => 
-        c.id === id ? {...c, ...consultationToUpdate, id} : c
-      ));
-      
-      setFormData({
-        date: '',
-        time: ''
-      });
-      
-      setEditingConsultationId(null);
-    } catch (err) {
-      console.error('Error updating consultation:', err);
-      setError('Error al actualizar la consulta');
-    } finally {
-      setLoading(false);
-    }
+  const handleEditClick = (consultation: Consultation) => {
+    setConsultationToEdit(consultation);
+    setShowCreateModal(true);
   };
   
   const handleDeleteClick = (consultationId: string) => {
@@ -159,44 +89,104 @@ const Consultas: React.FC<ConsultasProps> = ({
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = async () => {
-    if (!consultationToDelete) return;
+  const handleDeleteConfirm = async () => {
+    if (!consultationToDelete) {
+      console.error("No hay consulta seleccionada para eliminar");
+      return;
+    }
     
+    setLoading(true);
     try {
-      setLoading(true);
+      console.log(`Eliminando consulta ${consultationToDelete} para paciente ${patientId}`);
+      
+      // Verificar que la consulta existe antes de intentar eliminarla
+      const consultationExists = consultations.some(c => c.id === consultationToDelete);
+      if (!consultationExists) {
+        console.error(`La consulta ${consultationToDelete} no existe en el estado local`);
+        setError("La consulta que intentas eliminar no existe");
+        setLoading(false);
+        return;
+      }
+      
+      // Guardar el estado de la consulta antes de eliminarla
+      const consultationToDeleteData = consultations.find(c => c.id === consultationToDelete);
+      const wasScheduled = consultationToDeleteData?.status === 'scheduled';
+      
+      // Eliminar la consulta en Firestore
       await consultationService.deleteConsultation(patientId, consultationToDelete);
-      setConsultations(prev => prev.filter(c => c.id !== consultationToDelete));
+      
+      // Si la consulta era programada, actualizar manualmente nextAppointmentDate
+      if (wasScheduled) {
+        console.log("Era una consulta programada, actualizando nextAppointmentDate manualmente");
+        
+        // Obtener consultas restantes después de la eliminación
+        const remainingConsultations = consultations.filter(c => c.id !== consultationToDelete);
+        const scheduledConsultations = remainingConsultations
+          .filter(c => c.status === 'scheduled')
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        // Actualizar directamente el campo nextAppointmentDate del paciente
+        const patientRef = doc(db, "patients", patientId);
+        
+        if (scheduledConsultations.length > 0) {
+          console.log(`Próxima consulta programada: ${scheduledConsultations[0].date}`);
+          await updateDoc(patientRef, {
+            nextAppointmentDate: scheduledConsultations[0].date,
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          console.log("No hay más consultas programadas");
+          await updateDoc(patientRef, {
+            nextAppointmentDate: null,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+      
+      // Actualizar el estado local después de la eliminación exitosa
+      const updatedConsultations = consultations.filter(c => c.id !== consultationToDelete);
+      setConsultations(updatedConsultations);
+      
+      // Notificar al componente padre si es necesario
+      if (onConsultationsChange) {
+        onConsultationsChange(updatedConsultations);
+      }
+      
+      // Cerrar modal de confirmación
       setIsDeleteModalOpen(false);
       setConsultationToDelete(null);
-    } catch (err) {
-      console.error('Error deleting consultation:', err);
-      setError('Error al eliminar la consulta');
+      
+      console.log("Consulta eliminada exitosamente");
+    } catch (error) {
+      console.error("Error al eliminar consulta:", error);
+      
+      // Mensaje de error más descriptivo
+      if (error instanceof Error) {
+        setError(`Error al eliminar consulta: ${error.message}`);
+      } else {
+        setError("Error desconocido al eliminar la consulta");
+      }
+      
+      // Si el error es "Consulta no encontrada", actualicemos el estado local de todas formas
+      if (error instanceof Error && error.message.includes("Consulta no encontrada")) {
+        console.log("La consulta no se encontró en Firestore, actualizando estado local");
+        
+        // Actualizar el estado local aunque falle en Firestore
+        const updatedConsultations = consultations.filter(c => c.id !== consultationToDelete);
+        setConsultations(updatedConsultations);
+        
+        // Notificar al componente padre
+        if (onConsultationsChange) {
+          onConsultationsChange(updatedConsultations);
+        }
+        
+        // Cerrar modal
+        setIsDeleteModalOpen(false);
+        setConsultationToDelete(null);
+      }
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-  
-  const startEditing = (consultation: Consultation) => {
-    const datePart = consultation.date.split('T')[0];
-    const timePart = consultation.date.includes('T') 
-      ? consultation.date.split('T')[1].substring(0, 5) 
-      : '00:00';
-    
-    setFormData({
-      date: datePart,
-      time: timePart
-    });
-    
-    setEditingConsultationId(consultation.id!);
-    setShowNewAppointmentForm(false);
   };
   
   const navigateToConsultationPlan = (consultationId: string) => {
@@ -218,27 +208,26 @@ const Consultas: React.FC<ConsultasProps> = ({
         <h2 className="text-xl font-semibold text-gray-700">Consultas</h2>
         <div className="relative group">
           <button
-        onClick={() => {
-          setEditingConsultationId(null);
-          setShowNewAppointmentForm(true);
-          setFormData({ date: '', time: '' });
-        }}
-        className={`text-white rounded px-3 py-1 text-sm flex items-center ${
-          hasScheduledConsultation || !!editingConsultationId 
-            ? 'bg-gray-400 cursor-not-allowed' 
-            : 'bg-emerald-600 hover:bg-emerald-700'
-        }`}
-        disabled={!!editingConsultationId || hasScheduledConsultation}
+            onClick={() => {
+              setConsultationToEdit(null);
+              setShowCreateModal(true);
+            }}
+            className={`text-white rounded px-3 py-1 text-sm flex items-center ${
+              hasScheduledConsultation 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-emerald-600 hover:bg-emerald-700'
+            }`}
+            disabled={hasScheduledConsultation}
           >
-        <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-        </svg>
-        Nueva consulta
+            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Nueva consulta
           </button>
-          {(!!editingConsultationId || hasScheduledConsultation) && (
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-          {editingConsultationId ? "Estás editando una consulta" : "Ya existe una consulta programada"}
-        </div>
+          {hasScheduledConsultation && (
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+              Ya existe una consulta programada
+            </div>
           )}
         </div>
       </div>
@@ -249,168 +238,65 @@ const Consultas: React.FC<ConsultasProps> = ({
         </div>
       )}
 
-      {showNewAppointmentForm && !editingConsultationId && (
-        <div className="border border-gray-200 p-4 rounded-md mb-4 bg-gray-50">
-          <h3 className="font-medium text-gray-800 mb-3">Nueva consulta</h3>
-          
-            <div className="mb-4">
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-                  <input
-                    type="date"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
-                  <input
-                    type="time"
-                    name="time"
-                    value={formData.time}
-                    onChange={handleInputChange}
-                    step="900"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
-              </div>
-            </div>
-          
-          <div className="flex justify-end space-x-2">
-            <button
-              type="button"
-              onClick={() => setShowNewAppointmentForm(false)}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
-              disabled={loading}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleCreateConsultation}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm hover:bg-emerald-700"
-              disabled={loading}
-            >
-              {loading ? 'Guardando...' : 'Guardar consulta'}
-            </button>
-          </div>
-        </div>
-      )}
-      
-      {editingConsultationId && (
-        <div className="border border-gray-200 p-4 rounded-md mb-4 bg-gray-50">
-          <h3 className="font-medium text-gray-800 mb-3">Editar consulta</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-              <input
-                type="date"
-                name="date"
-                value={formData.date}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
-              <input
-                type="time"
-                name="time"
-                value={formData.time}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-          </div>
-          
-          <div className="flex justify-end space-x-2">
-            <button
-              type="button"
-              onClick={() => setEditingConsultationId(null)}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
-              disabled={loading}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => handleEditConsultation(editingConsultationId)}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm hover:bg-emerald-700"
-              disabled={loading}
-            >
-              {loading ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {loading && consultations.length === 0 ? (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
         </div>
       ) : (
         <div>
-          {/* Scheduled consultations section - hide when editing */}
-          {!editingConsultationId && (
-            <>
-              <h3 className="text-sm font-medium text-gray-700 mb-2 mt-4">Consultas programadas</h3>
-              {scheduledConsultations.length > 0 ? (
-                <div className="space-y-3 mb-6">
-                  {scheduledConsultations.map((consultation) => (
-                    <div
-                      key={consultation.id}
-                      className="border rounded-md p-4 bg-white border-gray-200"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center">
-                          <div className="h-3 w-3 rounded-full mr-2 bg-amber-400"></div>
-                          <h3 className="font-medium text-gray-800">
-                            {formatDate(consultation.date)}
-                          </h3>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => navigateToConsultationPlan(consultation.id!)}
-                            className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-700 hover:bg-gray-200"
-                          >
-                            Ir a plan
-                          </button>
-                          <button
-                            onClick={() => startEditing(consultation)}
-                            className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(consultation.id!)}
-                            className="text-xs bg-red-50 text-red-700 px-2 py-1 rounded hover:bg-red-100"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {consultation.weight && (
-                        <div className="mt-2 text-sm">
-                          <span className="font-medium">Peso:</span> {consultation.weight} kg
-                        </div>
-                      )}
+          {/* Scheduled consultations section */}
+          <h3 className="text-sm font-medium text-gray-700 mb-2 mt-4">Consultas programadas</h3>
+          {scheduledConsultations.length > 0 ? (
+            <div className="space-y-3 mb-6">
+              {scheduledConsultations.map((consultation) => (
+                <div
+                  key={consultation.id}
+                  className="border rounded-md p-4 bg-white border-gray-200"
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      <div className="h-3 w-3 rounded-full mr-2 bg-amber-400"></div>
+                      <h3 className="font-medium text-gray-800">
+                        {formatDate(consultation.date)}
+                      </h3>
                     </div>
-                  ))}
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => navigateToConsultationPlan(consultation.id!)}
+                        className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-700 hover:bg-gray-200"
+                      >
+                        Ir a plan
+                      </button>
+                      <button
+                        onClick={() => handleEditClick(consultation)}
+                        className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(consultation.id!)}
+                        className="text-xs bg-red-50 text-red-700 px-2 py-1 rounded hover:bg-red-100"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {consultation.weight && (
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium">Peso:</span> {consultation.weight} kg
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="text-center py-4 text-gray-500 mb-6">
-                  No hay consultas programadas
-                </div>
-              )}
-            </>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-4 text-gray-500 mb-6">
+              No hay consultas programadas
+            </div>
           )}
 
-          {/* Previous consultations section - always show */}
+          {/* Previous consultations section */}
           <h3 className="text-sm font-medium text-gray-700 mb-2 mt-4">Consultas previas</h3>
           {previousConsultations.length > 0 ? (
             <div className="space-y-3">
@@ -459,6 +345,19 @@ const Consultas: React.FC<ConsultasProps> = ({
         </div>
       )}
 
+      {/* Modales */}
+      <CreateConsultation
+        patientId={patientId}
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setConsultationToEdit(null);
+        }}
+        onConsultationCreated={handleConsultationCreated}
+        isEditing={!!consultationToEdit}
+        consultationToEdit={consultationToEdit}
+      />
+
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-green-50/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md shadow relative">
@@ -480,7 +379,7 @@ const Consultas: React.FC<ConsultasProps> = ({
               </button>
               <button
                 type="button"
-                onClick={confirmDelete}
+                onClick={handleDeleteConfirm}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none"
                 disabled={loading}
               >

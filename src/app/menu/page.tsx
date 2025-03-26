@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { authService } from '@/app/service/firebase';
+import { authService } from '@/app/shared/firebase';
 import { Apple, NoodleBowl, Running, TrashCan } from '@carbon/icons-react';
 
 const MenuPage = () => {

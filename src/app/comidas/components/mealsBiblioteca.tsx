@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   doc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp
 } from 'firebase/firestore';
-import { db, authService } from '@/app/service/firebase';
+import { db, authService } from '@/app/shared/firebase';
 import { 
   TrashCan, 
   Strawberry, 

@@ -1,15 +1,17 @@
+export type MealCategory = 'desayuno' | 'mediaManana' | 'almuerzo' | 'lunchTarde' | 'cena' | 'general';
+
 // Definición de etiquetas para categorías de comidas
-export const categoryLabels = {
-  'desayuno': 'Desayuno',
-  'mediaManana': 'Media Mañana',
-  'almuerzo': 'Almuerzo',
-  'lunchTarde': 'Lunch Tarde',
-  'cena': 'Cena',
-  'general': 'General'
+export const categoryLabels: Record<MealCategory, string> = {
+  desayuno: 'Desayuno',
+  mediaManana: 'Media Mañana',
+  almuerzo: 'Almuerzo',
+  lunchTarde: 'Lunch Tarde',
+  cena: 'Cena',
+  general: 'General'
 };
 
 // Colores para las categorías
-export const categoryColors = {
+export const categoryColors: Record<MealCategory, {bg: string, text: string, dark: string, light: string}> = {
   desayuno: {bg: 'bg-red-100', text: 'text-red-800', dark: '#991B1B', light: '#FEE2E2'},
   mediaManana: {bg: 'bg-yellow-100', text: 'text-yellow-800', dark: '#92400E', light: '#FEF3C7'},
   almuerzo: {bg: 'bg-blue-100', text: 'text-blue-800', dark: '#1E40AF', light: '#DBEAFE'},

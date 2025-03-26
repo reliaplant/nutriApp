@@ -5,8 +5,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { format, parseISO, isAfter, isBefore, isToday, isPast, isFuture, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Patient, patientService, authService } from '../service/firebase';
+import { patientService, authService } from '../shared/firebase';
 import PatientModal from '../pacientes/components/crearPaciente';
+import { Patient } from '../shared/interfaces';
+
 
 const PatientsKanbanPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -73,7 +75,7 @@ const PatientsKanbanPage: React.FC = () => {
   // Función para formatear fechas
   const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'No programada';
-    return format(parseISO(dateString), "d 'de' MMMM, yyyy", { locale: es });
+    return format(parseISO(dateString), "d 'de' MMMM, yyyy - HH:mm", { locale: es });
   };
 
   // Filtrar pacientes según criterios de búsqueda
@@ -148,6 +150,9 @@ const PatientsKanbanPage: React.FC = () => {
 
     const isTodayAppointment = patient.nextAppointmentDate &&
       isToday(parseISO(patient.nextAppointmentDate));
+    
+    // Determinar si se muestra la información de la próxima cita
+    const shouldShowAppointment = patient.status === 'active';
 
     return (
       <div className="mb-2 bg-white rounded border border-gray-200 p-4 shadow hover:shadow-md transition-shadow">
@@ -200,16 +205,22 @@ const PatientsKanbanPage: React.FC = () => {
 
         {/* Appointment info and action button */}
         <div className="mt-3 flex justify-between items-center">
-          <span className="text-xs text-gray-600">
-            <span className="font-medium">Cita:</span> {formatDate(patient.nextAppointmentDate)}
-          </span>
+          {shouldShowAppointment ? (
+            <span className="text-xs text-gray-600">
+              <span className="font-medium">Próxima cita:</span> {formatDate(patient.nextAppointmentDate)}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-500">
+              {patient.status === 'discharged' ? 'Paciente dado de alta' : 'Paciente perdido'}
+            </span>
+          )}
           
-            <Link
+          <Link
             href={`/detalle-paciente/${patient.id}`}
             className="text-xs bg-gray-100 hover:bg-emerald-200 text-gray-700 hover:text-emerald-700 px-3 py-1 rounded transition-colors"
-            >
+          >
             Ver
-            </Link>
+          </Link>
         </div>
       </div>
     );
