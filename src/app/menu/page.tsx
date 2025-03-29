@@ -128,18 +128,30 @@ const MenuPage = () => {
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
                 </Link>
-{/* 
+
                 <Link
-                  href="/nutricion"
+                  href="/cardapio"
                   className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
                 >
-                  <Running size={20} />
-
-                  <span className="ml-2 relative">
-                    Ejercicios
+                  <svg 
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors" 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    />
+                  </svg>
+                  <span className="relative">
+                    Refacciones
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
-                </Link> */}
+                </Link>
               </div>
             </div>
 
@@ -280,6 +292,21 @@ const MenuPage = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
               Nutrición
+            </Link>
+            <Link
+              href="/cardapio"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Refacciones
             </Link>
           </div>
         </div>

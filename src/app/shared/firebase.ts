@@ -38,7 +38,7 @@ import {
 } from 'firebase/storage';
 
 // Importar la interfaz Patient desde interfaces.ts
-import { Patient, DailyTracking } from './interfaces';
+import { Patient, DailyTracking, Refaccion } from './interfaces';
 import { limit } from "firebase/firestore";
 
 // Export the storage functions so they can be used elsewhere
@@ -841,92 +841,245 @@ async function updateNextAppointmentDate(patientId: string): Promise<void> {
     // Not throwing the error to avoid failing the entire operation
   }
 }
-// Add 'limit' to your existing firebase/firestore imports at the top of the file:
 
-// Servicio para manejar los registros diarios de los pacientes
-export const dailyTrackingService = {
-  async createTracking(tracking: DailyTracking): Promise<string> {
-    try {
-      const trackingData = {
-        ...tracking,
-        createdAt: serverTimestamp(),
-      };
-      
-      // Validación básica
-      if (!tracking.patientId) {
-        throw new Error("ID de paciente requerido");
-      }
-      
-      // Comprobamos que el paciente existe antes de guardar
-      const patientRef = doc(db, "patients", tracking.patientId);
-      const patientSnap = await getDoc(patientRef);
-      
-      if (!patientSnap.exists()) {
-        throw new Error("Paciente no encontrado");
-      }
-      
-      // Guardamos sin validar si el usuario que guarda tiene permisos
-      const docRef = await addDoc(
-        collection(db, `patients/${tracking.patientId}/tracking`), 
-        trackingData
-      );
-      
-      console.log(`Tracking guardado con ID: ${docRef.id}`);
-      return docRef.id;
-    } catch (err) {
-      console.error("Error al crear tracking:", err);
-      throw err;
-    }
-  },
-  
-  async getTrackingsByPatient(patientId: string): Promise<DailyTracking[]> {
-    // Aquí sí mantenemos las reglas de seguridad para los nutricionistas
+// Servicio para manejar refacciones
+export const refaccionService = {
+  async createRefaccion(refaccion: Refaccion): Promise<string> {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) {
-      throw new Error("Debes iniciar sesión para ver seguimientos");
+      throw new Error("Debes iniciar sesión para crear una refacción");
     }
     
-    const q = query(
-      collection(db, `patients/${patientId}/tracking`),
-      orderBy('date', 'desc')
+    // Limpiar campos undefined antes de guardar
+    const refaccionData = Object.entries(refaccion).reduce((acc, [key, value]) => {
+      if (value !== undefined) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Record<string, any>);
+    
+    // Agregar timestamp
+    refaccionData.createdAt = serverTimestamp();
+    
+    const docRef = await addDoc(collection(db, "refacciones"), refaccionData);
+    return docRef.id;
+  },
+
+  async getRefacciones(): Promise<Refaccion[]> {
+    try {
+      const refaccionesQuery = query(
+        collection(db, "refacciones"),
+        orderBy("name")
+      );
+      
+      const querySnapshot = await getDocs(refaccionesQuery);
+      
+      if (querySnapshot.empty) {
+        console.log("No se encontraron refacciones");
+        return [];
+      }
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Refaccion));
+      
+    } catch (error) {
+      console.error("Error al obtener refacciones:", error);
+      throw new Error("No se pudieron cargar las refacciones");
+    }
+  },
+
+  async updateRefaccion(id: string, refaccionData: Partial<Refaccion>): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para actualizar refacciones");
+    }
+    
+    const refaccionRef = doc(db, "refacciones", id);
+    await updateDoc(refaccionRef, refaccionData);
+  },
+
+  async deleteRefaccion(id: string): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para eliminar refacciones");
+    }
+    
+    const refaccionRef = doc(db, "refacciones", id);
+    await deleteDoc(refaccionRef);
+  },
+
+  // Get only available refacciones for the menu
+  async getAvailableRefacciones(): Promise<Refaccion[]> {
+    try {
+      // Try with just filtering without ordering first
+      const refaccionesQuery = query(
+        collection(db, "refacciones"),
+        where("status", "==", "available")
+      );
+      
+      const querySnapshot = await getDocs(refaccionesQuery);
+      
+      if (querySnapshot.empty) {
+        console.log("No se encontraron refacciones disponibles");
+        return [];
+      }
+      
+      // Then sort in memory (for now until index is created)
+      const refacciones = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Refaccion));
+      
+      // Sort by name locally
+      return refacciones.sort((a, b) => a.name.localeCompare(b.name));
+      
+    } catch (error) {
+      console.error("Error al obtener refacciones disponibles:", error);
+      throw new Error("No se pudieron cargar las refacciones disponibles");
+    }
+  }
+};
+
+// Add new service for orders management
+export const orderService = {
+  async createOrder(order: Order): Promise<string> {
+    // No authentication required for customers creating orders
+    const orderData = {
+      ...order,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    };
+    
+    const docRef = await addDoc(collection(db, "orders"), orderData);
+    return docRef.id;
+  },
+
+  async getOrders(): Promise<Order[]> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para ver los pedidos");
+    }
+    
+    const ordersQuery = query(
+      collection(db, "orders"),
+      orderBy("createdAt", "desc")
     );
     
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(ordersQuery);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    } as DailyTracking));
+    } as Order));
   },
 
-  // Verificar si un paciente existe por ID (sin validaciones adicionales)
-  async checkPatientExists(patientId: string): Promise<boolean> {
-    try {
-      const patientRef = doc(db, "patients", patientId);
-      const docSnap = await getDoc(patientRef);
-      return docSnap.exists();
-    } catch (error) {
-      console.error("Error checking patient:", error);
-      return false;
+  async updateOrderStatus(orderId: string, status: Order['status']): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para actualizar pedidos");
+    }
+    
+    const orderRef = doc(db, "orders", orderId);
+    
+    let updateData: any = {
+      status: status,
+    };
+    
+    // If completing the order, add completion timestamp
+    if (status === 'completed') {
+      updateData.completedAt = serverTimestamp();
+    }
+    
+    await updateDoc(orderRef, updateData);
+  },
+
+  async deleteOrder(orderId: string): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para eliminar pedidos");
+    }
+    
+    const orderRef = doc(db, "orders", orderId);
+    await deleteDoc(orderRef);
+  },
+
+  async getOrderById(orderId: string): Promise<Order | null> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para ver los detalles del pedido");
+    }
+    
+    const orderRef = doc(db, "orders", orderId);
+    const orderSnap = await getDoc(orderRef);
+    
+    if (orderSnap.exists()) {
+      return { id: orderSnap.id, ...orderSnap.data() } as Order;
+    }
+    
+    return null;
+  },
+  
+  async getOrdersByStatus(status: Order['status']): Promise<Order[]> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para filtrar pedidos");
+    }
+    
+    const ordersQuery = query(
+      collection(db, "orders"),
+      where("status", "==", status),
+      orderBy("createdAt", "desc")
+    );
+    
+    const querySnapshot = await getDocs(ordersQuery);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Order));
+  }
+};
+
+// Add new service for order settings management
+export const orderSettingsService = {
+  // Get current settings
+  async getSettings(): Promise<OrderSettings> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para acceder a la configuración");
+    }
+    
+    // Always use a single document with a fixed ID for settings
+    const settingsRef = doc(db, "orderSettings", "current");
+    const docSnap = await getDoc(settingsRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data() as OrderSettings;
+    } else {
+      // Return default settings if none exist
+      return {
+        shippingFee: 100,
+        freeShippingThreshold: 1000,
+        discountThreshold: 1800,
+        discountAmount: 300
+      };
     }
   },
   
-  // Obtener nombre del paciente sin validación de seguridad
-  async getPatientName(patientId: string): Promise<string | null> {
-    try {
-      if (!patientId) return null;
-      
-      const patientRef = doc(db, "patients", patientId);
-      const docSnap = await getDoc(patientRef);
-      
-      if (docSnap.exists()) {
-        const patientData = docSnap.data();
-        return patientData?.name || null;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error("Error al obtener nombre del paciente:", error);
-      return null;
+  // Update settings
+  async updateSettings(settings: OrderSettings): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("Debes iniciar sesión para actualizar la configuración");
     }
+    
+    // Add timestamp
+    const updatedSettings = {
+      ...settings,
+      updatedAt: serverTimestamp()
+    };
+    
+    const settingsRef = doc(db, "orderSettings", "current");
+    await setDoc(settingsRef, updatedSettings);
   }
 };
