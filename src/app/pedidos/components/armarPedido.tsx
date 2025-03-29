@@ -24,6 +24,7 @@ export default function ArmarPedido({
     const fetchRefacciones = async () => {
       try {
         setLoading(true);
+        // Usar el servicio modificado que no verifica autenticación
         const disponibles = await refaccionService.getAvailableRefacciones();
         setRefacciones(disponibles);
         setError(null);

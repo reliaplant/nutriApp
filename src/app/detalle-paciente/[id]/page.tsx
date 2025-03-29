@@ -11,8 +11,6 @@ import Evolucion from '@/app/detalle-paciente/components/evolucion';
 import Documentos, { PatientDocument } from '@/app/detalle-paciente/components/documentos';
 import { patientService, consultationService } from '@/app/shared/firebase';
 import { ref, storage } from '@/app/shared/firebase';
-import TrackingLinks from '../components/tracking-links';
-import TrackingSummary from '../components/tracking-summary';
 
 // Importar estas bibliotecas adicionales al inicio del archivo
 import {
@@ -74,7 +72,7 @@ function calculateWeightForBMI(bmi: number, heightCm: number): number {
 const PatientDetailPage = () => {
     const params = useParams();
     const router = useRouter();
-    const patientId = params.id as string;
+    const patientId = params?.id as string || 'new';
 
     // Estado para el paciente
     const [patient, setPatient] = useState<Patient>({
@@ -149,30 +147,34 @@ const PatientDetailPage = () => {
     }, [patientId]);
 
     // Función para actualizar el paciente
-        const handlePatientUpdate = async (updatedPatient: Omit<Patient, 'nutritionistId'> & { nutritionistId?: string }) => {
-            try {
-                // Ensure nutritionistId is included
-                const completePatient: Patient = {
-                    ...updatedPatient,
-                    nutritionistId: updatedPatient.nutritionistId || patient.nutritionistId
-                };
+    const handlePatientUpdate = async (updatedPatient: Omit<Patient, 'nutritionistId'> & { nutritionistId?: string }) => {
+        try {
+            // Ensure nutritionistId is included
+            const completePatient: Patient = {
+                ...updatedPatient,
+                nutritionistId: updatedPatient.nutritionistId || patient.nutritionistId
+            };
+            
+            if (patientId === 'new') {
+                // Crear nuevo paciente - pass only the name instead of the full patient object
+                const newPatientId = await patientService.createPatient(completePatient.name);
                 
-                if (patientId === 'new') {
-                    // Crear nuevo paciente
-                    const newPatientId = await patientService.createPatient(completePatient);
-                    alert('Paciente creado con éxito');
-                    router.push(`/detalle-paciente/${newPatientId}`);
-                } else {
-                    // Actualizar paciente existente
-                    await patientService.updatePatient(patientId, completePatient);
-                    setPatient(completePatient);
-                    alert('Datos del paciente actualizados');
-                }
-            } catch (err) {
-                console.error('Error al guardar paciente:', err);
-                // alert('Error al guardar los datos del paciente');
+                // After getting the ID, update with all fields
+                await patientService.updatePatient(newPatientId, completePatient);
+                
+                alert('Paciente creado con éxito');
+                router.push(`/detalle-paciente/${newPatientId}`);
+            } else {
+                // Actualizar paciente existente
+                await patientService.updatePatient(patientId, completePatient);
+                setPatient(completePatient);
+                alert('Datos del paciente actualizados');
             }
-        };
+        } catch (err) {
+            console.error('Error al guardar paciente:', err);
+            // alert('Error al guardar los datos del paciente');
+        }
+    };
 
     // Add this function to handle patient deletion
     const handleDeletePatient = async (patientId: string) => {
@@ -286,8 +288,6 @@ const PatientDetailPage = () => {
                                     }}
                                 />
 
-                                <TrackingSummary patientId={patient.id} />
-
                                 <Evolucion
                                     patient={patient}
                                     weightHistory={weightHistory}
@@ -304,7 +304,6 @@ const PatientDetailPage = () => {
                                     />
                                 </div>
 
-                                <TrackingLinks patientId={params.id} />
                             </>
                         ) : (
                             <div className="bg-white p-6 mb-4 border border-gray-300 radius shadow-md">

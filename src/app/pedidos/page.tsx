@@ -1,7 +1,8 @@
 "use client";
 
+// Importa solo lo necesario, elimina el check de autenticación
 import { useState, useEffect, useMemo } from "react";
-import { doc, getDoc } from "firebase/firestore"; // Importar funciones para leer documentos
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "../shared/firebase"; // Importar referencia a la base de datos
 import ArmarPedido from "./components/armarPedido";
 import ResumenPedido from "./components/resumen";

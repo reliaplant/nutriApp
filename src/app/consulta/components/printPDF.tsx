@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import jsPDF from 'jspdf';
 import { Meal } from '@/app/consulta/components/meals';
-import { Patient, Consultation } from '@/app/shared/firebase';
+import { Consultation } from '@/app/shared/firebase';
+import { Patient } from '@/app/shared/interfaces';  
 import { Printer } from 'lucide-react';
 import moment from 'moment';
 

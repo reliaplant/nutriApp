@@ -4,30 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   collection, query, orderBy, getDocs, doc, Timestamp
 } from 'firebase/firestore';
-import { db, authService } from '@/app/shared/firebase';
+import { db, authService, savedMealService } from '@/app/shared/firebase'; // Add savedMealService import
 import { Search, ArrowDown, ArrowUp, Pencil, Trash2, PlusCircle } from 'lucide-react';
-import { MealOption } from '@/app/consulta/components/meals';
 import MealsBiblioteca from './components/mealsBiblioteca';
-import { Merienda } from 'next/font/google';
 import { categoryLabels, categoryColors } from './constants';
-
-// Definición de interfaz para comidas guardadas
-export interface SavedMeal {
-  id: string;
-  name: string;
-  category: string;
-  mealOption: MealOption;
-  totalNutrition: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-  createdAt: any; // Cambiar a cualquier tipo para permitir null y Timestamp
-  usageCount: number;
-  lastUsedDate: any; // Cambiar a cualquier tipo para permitir null y Timestamp
-  imageUrl?: string | null; // Permitir explícitamente string o null
-}
+import { SavedMeal } from '@/app/shared/interfaces';
 
 export default function SavedMealsPage() {
   // Eliminar la definición local de categoryLabels

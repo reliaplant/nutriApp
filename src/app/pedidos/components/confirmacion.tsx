@@ -35,8 +35,9 @@ export default function Confirmacion({
       setSubmitting(true);
       setError(null);
       
-      // Submit order to Firebase
-      const id = await orderService.createOrder(order);
+      // Aquí puedes modificar orderService.createOrder para que no requiera autenticación
+      // o crear una versión específica para pedidos públicos
+      const id = await orderService.createPublicOrder(order);
       setOrderId(id);
       setSuccess(true);
       

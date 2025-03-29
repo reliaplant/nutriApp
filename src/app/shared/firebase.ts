@@ -38,7 +38,7 @@ import {
 } from 'firebase/storage';
 
 // Importar la interfaz Patient desde interfaces.ts
-import { Patient, DailyTracking, Refaccion } from './interfaces';
+import { Patient, DailyTracking, Refaccion, Order, OrderSettings } from './interfaces';
 import { limit } from "firebase/firestore";
 
 // Export the storage functions so they can be used elsewhere
@@ -1037,7 +1037,23 @@ export const orderService = {
       id: doc.id,
       ...doc.data()
     } as Order));
-  }
+  },
+
+  createPublicOrder: async (order: Order) => {
+    try {
+      // No verificamos autenticación aquí
+      const ordersRef = collection(db, 'publicOrders');
+      const docRef = await addDoc(ordersRef, {
+        ...order,
+        createdAt: serverTimestamp(),
+        source: 'public_form'
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating public order:', error);
+      throw new Error('No se pudo crear el pedido');
+    }
+  },
 };
 
 // Add new service for order settings management
@@ -1083,3 +1099,107 @@ export const orderSettingsService = {
     await setDoc(settingsRef, updatedSettings);
   }
 };
+
+// Add the missing dailyTrackingService
+export const dailyTrackingService = {
+  async getDailyTrackings(patientId: string): Promise<DailyTracking[]> {
+    try {
+      const user = authService.getCurrentUser();
+      if (!user) {
+        throw new Error("Debes iniciar sesión para ver seguimientos");
+      }
+      
+      const trackingsQuery = query(
+        collection(db, "dailyTrackings"),
+        where("patientId", "==", patientId),
+        orderBy("date", "desc")
+      );
+      
+      const querySnapshot = await getDocs(trackingsQuery);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as DailyTracking));
+    } catch (error) {
+      console.error("Error fetching daily trackings:", error);
+      throw error;
+    }
+  },
+
+  async addDailyTracking(tracking: DailyTracking): Promise<string> {
+    try {
+      const user = authService.getCurrentUser();
+      if (!user) {
+        throw new Error("Debes iniciar sesión para añadir seguimientos");
+      }
+
+      const trackingData = {
+        ...tracking,
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, "dailyTrackings"), trackingData);
+      return docRef.id;
+    } catch (error) {
+      console.error("Error adding daily tracking:", error);
+      throw error;
+    }
+  },
+
+  async updateDailyTracking(id: string, data: Partial<DailyTracking>): Promise<void> {
+    try {
+      const user = authService.getCurrentUser();
+      if (!user) {
+        throw new Error("Debes iniciar sesión para actualizar seguimientos");
+      }
+
+      const trackingRef = doc(db, "dailyTrackings", id);
+      await updateDoc(trackingRef, data);
+    } catch (error) {
+      console.error("Error updating daily tracking:", error);
+      throw error;
+    }
+  },
+
+  async deleteDailyTracking(id: string): Promise<void> {
+    try {
+      const user = authService.getCurrentUser();
+      if (!user) {
+        throw new Error("Debes iniciar sesión para eliminar seguimientos");
+      }
+
+      const trackingRef = doc(db, "dailyTrackings", id);
+      await deleteDoc(trackingRef);
+    } catch (error) {
+      console.error("Error deleting daily tracking:", error);
+      throw error;
+    }
+  },
+  
+  async getDailyTrackingById(id: string): Promise<DailyTracking | null> {
+    try {
+      const user = authService.getCurrentUser();
+      if (!user) {
+        throw new Error("Debes iniciar sesión para ver detalles de seguimiento");
+      }
+      
+      const trackingRef = doc(db, "dailyTrackings", id);
+      const trackingSnap = await getDoc(trackingRef);
+      
+      if (trackingSnap.exists()) {
+        return { id: trackingSnap.id, ...trackingSnap.data() } as DailyTracking;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error fetching daily tracking:", error);
+      throw error;
+    }
+  }
+};
+
+// // Fix the Consultation interface if needed - let's ensure it's exported
+// export { Consultation };
+
+// // Export the Patient interface if needed
+// export type { Patient };

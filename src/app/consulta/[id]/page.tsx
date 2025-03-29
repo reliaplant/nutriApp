@@ -12,14 +12,15 @@ import moment from 'moment';
 import Notas from '../components/notas';
 import Meals, { Meal } from '../components/meals';
 import NutritionalSummary from '../components/NutritionalSummary';
-import { patientService, consultationService, authService, Patient, Consultation } from '@/app/shared/firebase';
+import { patientService, consultationService, authService } from '@/app/shared/firebase';
+import { Patient, Consultation } from '@/app/shared/interfaces';
 
 export default function CrearPlan() {
   // Obtener IDs de paciente y consulta
   const params = useParams();
   const searchParams = useSearchParams();
-  const consultationId = typeof params.id === 'string' ? params.id : '';
-  const patientId = searchParams.get('patientId') || '';
+  const consultationId = params?.id && typeof params.id === 'string' ? params.id : '';
+  const patientId = searchParams?.get('patientId') || '';
 
   // Estados
   const [activeTab, setActiveTab] = useState('summary');
@@ -32,24 +33,7 @@ export default function CrearPlan() {
 
   // Estado de las comidas y nutrición total
   const [meals, setMeals] = useState<Meal[]>([
-    {
-      name: 'Desayuno',
-      time: '08:00',
-      options: [
-        {
-          content: 'Tostadas con aguacate, huevo y jugo de naranja',
-          ingredients: [
-            { name: "Pan integral", quantity: 60, calories: 160, protein: 8, carbs: 28, fat: 2 },
-            { name: "Aguacate", quantity: 50, calories: 80, protein: 1, carbs: 4, fat: 7 },
-            { name: "Huevo", quantity: 50, calories: 70, protein: 6, carbs: 0, fat: 5 },
-            { name: "Jugo de naranja", quantity: 200, calories: 90, protein: 1, carbs: 21, fat: 0 }
-          ],
-          isSelectedForSummary: true
-        }
-      ],
-      activeOptionIndex: 0,
-      selectedOptionForSummary: 0
-    }
+    
   ]);
   
   const [totalNutrition, setTotalNutrition] = useState({

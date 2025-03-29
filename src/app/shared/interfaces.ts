@@ -101,3 +101,50 @@ export interface OrderSettings {
   discountAmount: number;       // Cantidad de descuento a aplicar
   updatedAt?: any;              // Timestamp de la última actualización (opcional)
 }
+
+export interface MealOption {
+  name: string;
+  content: string;
+  ingredients: Array<{
+    name: string;
+    quantity: number;
+    calories: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+  }>;
+  isSelectedForSummary: boolean;
+  instructions?: string;
+}
+
+export interface SavedMeal {
+  id: string;
+  name: string;
+  category: string;
+  mealOption: MealOption;
+  totalNutrition: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  createdAt: any | null;
+  usageCount: number;
+  lastUsedDate: any | null;
+  imageUrl: string | null;
+  nutritionistId?: string;
+}
+
+// Add Consultation interface
+export interface Consultation {
+  id?: string;
+  patientId: string;
+  date: string;
+  weight?: number;
+  comments?: string;
+  status: 'scheduled' | 'completed';
+  highlights?: string[];
+  nutritionPlan?: any; // For future integration with CrearPlan
+  createdAt?: any; // Firebase Timestamp
+  nutritionistId?: string;
+}
