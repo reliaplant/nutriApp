@@ -87,7 +87,7 @@ const MenuPage = () => {
                 </span>
               </Link>
               <div className="ml-12 hidden md:flex md:items-center md:space-x-6">
-                <Link
+                {/* <Link
                   href="/pacientes"
                   className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
                 >
@@ -104,9 +104,9 @@ const MenuPage = () => {
                     Pacientes
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
-                </Link>
+                </Link> */}
 
-                <Link
+                {/* <Link
                   href="/comidas"
                   className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
                 >
@@ -116,9 +116,9 @@ const MenuPage = () => {
                     Comidas
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
-                </Link>
+                </Link> */}
 
-                <Link
+                {/* <Link
                   href="/ingredientes"
                   className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
                 >
@@ -127,9 +127,9 @@ const MenuPage = () => {
                     Ingredientes
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
-                </Link>
+                </Link> */}
 
-                <Link
+                {/* <Link
                   href="/cardapio"
                   className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
                 >
@@ -149,6 +149,148 @@ const MenuPage = () => {
                   </svg>
                   <span className="relative">
                     Refacciones
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link> */}
+
+                {/* Tab Clientes */}
+                <Link
+                  href="/clientes"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="relative">
+                    Clientes
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link>
+
+                {/* Tab Ventas */}
+                <Link
+                  href="/ventas"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2M16 11V7a4 4 0 00-8 0v4M5 17h14" />
+                  </svg>
+                  <span className="relative">
+                    Ventas
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link>
+
+                {/* Tab Productos */}
+                <Link
+                  href="/productos"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V7a2 2 0 00-2-2h-4V3a1 1 0 00-2 0v2H6a2 2 0 00-2 2v6m16 0v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6m16 0H4" />
+                  </svg>
+                  <span className="relative">
+                    Productos
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link>
+
+                {/* Tab Gastos */}
+                <Link
+                  href="/gastos"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" />
+                  </svg>
+                  <span className="relative">
+                    Gastos
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link>
+
+                {/* Tab Ingresos y Egresos */}
+                <Link
+                  href="/movimientos"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" />
+                  </svg>
+                  <span className="relative">
+                    Ingresos y Egresos
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link>
+
+                {/* Tab Guías */}
+                {/* <Link
+                  href="/guias"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m0 0H3" />
+                  </svg>
+                  <span className="relative">
+                    Guías
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
+                  </span>
+                </Link> */}
+
+                {/* Tab Calculadora */}
+                <Link
+                  href="/calculadora"
+                  className="group flex items-center px-2 py-1 text-sm font-medium text-gray-700 hover:text-emerald-600 transition-all duration-150 ease-in-out"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 text-gray-500 group-hover:text-emerald-500 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth="2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h8M8 14h8M10 8v8M14 8v8" />
+                  </svg>
+                  <span className="relative">
+                    Calculadora
                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-500 group-hover:w-full transition-all duration-200"></span>
                   </span>
                 </Link>
@@ -307,6 +449,113 @@ const MenuPage = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Refacciones
+            </Link>
+            <Link
+              href="/clientes"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Clientes
+            </Link>
+            <Link
+              href="/ventas"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2M16 11V7a4 4 0 00-8 0v4M5 17h14" />
+              </svg>
+              Ventas
+            </Link>
+            <Link
+              href="/productos"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V7a2 2 0 00-2-2h-4V3a1 1 0 00-2 0v2H6a2 2 0 00-2 2v6m16 0v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6m16 0H4" />
+              </svg>
+              Productos
+            </Link>
+            <Link
+              href="/gastos"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" />
+              </svg>
+              Gastos
+            </Link>
+            <Link
+              href="/movimientos"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" />
+              </svg>
+              Ingresos y Egresos
+            </Link>
+            {/* <Link
+              href="/guias"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m0 0H3" />
+              </svg>
+              Guías
+            </Link> */}
+            <Link
+              href="/calculadora"
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <svg
+                className="mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth="2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h8M8 14h8M10 8v8M14 8v8" />
+              </svg>
+              Calculadora
             </Link>
           </div>
         </div>
