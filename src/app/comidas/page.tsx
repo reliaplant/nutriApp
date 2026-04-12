@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   collection, query, orderBy, getDocs, doc, Timestamp
 } from 'firebase/firestore';
-import { db, authService, savedMealService } from '@/app/shared/firebase'; // Add savedMealService import
+import { db, authService, savedMealService } from '@/app/shared/firebase';
+import { useAuth } from '@/app/shared/AuthContext';
 import { Search, ArrowDown, ArrowUp, Pencil, Trash2, PlusCircle } from 'lucide-react';
 import MealsBiblioteca from './components/mealsBiblioteca';
 import { categoryLabels, categoryColors } from './constants';
@@ -28,16 +29,17 @@ export default function SavedMealsPage() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
-  // Cargar comidas guardadas al inicio
+  const { firebaseUser, loading: authLoading } = useAuth();
+
+  // Cargar comidas guardadas cuando auth está listo
   useEffect(() => {
-    async function initLoad() {
-      // Asegurarse que la autenticación esté lista antes de cargar datos
-      await authService.getAuthStatePromise();
+    if (authLoading) return;
+    if (firebaseUser) {
       loadSavedMeals();
+    } else {
+      setLoading(false);
     }
-    
-    initLoad();
-  }, []);
+  }, [firebaseUser, authLoading]);
   
   // Función para cargar comidas guardadas
   const loadSavedMeals = async () => {

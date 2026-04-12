@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 
 // Importaciones correctas del servicio firebase
 import { db, authService } from '@/app/shared/firebase';
+import { useAuth } from '@/app/shared/AuthContext';
 
 // Tipos
 interface Ingredient {
@@ -36,12 +37,14 @@ export default function IngredientsPage() {
     fat: 0
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const { firebaseUser, loading: authLoading } = useAuth();
 
   // Cargar ingredientes
   useEffect(() => {
+    if (authLoading) return;
     async function loadIngredients() {
       try {
-        const currentUser = authService.getCurrentUser();
+        const currentUser = firebaseUser;
         if (!currentUser) {
           toast.error('Debes iniciar sesión para ver los ingredientes');
           setLoading(false);
@@ -68,7 +71,7 @@ export default function IngredientsPage() {
     }
     
     loadIngredients();
-  }, []);
+  }, [firebaseUser, authLoading]);
 
   // Guardar ingredientes
   const saveIngredients = async (updatedIngredients: Ingredient[]) => {

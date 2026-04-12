@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Refaccion } from '../shared/interfaces';
-import { refaccionService } from '../shared/firebase';
+import { Refaccion } from '@/app/shared/interfaces';
+import { refaccionService } from '@/app/shared/firebase';
 import RefaccionModal from './refaccion';
 
 export default function CardapioPage() {

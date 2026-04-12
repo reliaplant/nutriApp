@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { pedidosService } from "../ventas/pedidos.service";
-import { gastosService } from "../gastos/gastos.service";
+import { pedidosService } from "@/app/(negocio)/ventas/pedidos.service";
+import { gastosService } from "@/app/(negocio)/gastos/gastos.service";
 import { Movimiento } from "./movimiento.interface";
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO } from "date-fns";
 import { Bar } from "react-chartjs-2";

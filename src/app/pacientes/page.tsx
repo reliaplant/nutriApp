@@ -1,13 +1,14 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { format, parseISO, isAfter, isBefore, isToday, isPast, isFuture, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { patientService, authService } from '../shared/firebase';
+import { patientService } from '@/app/shared/firebase';
 import PatientModal from '../pacientes/components/crearPaciente';
-import { Patient } from '../shared/interfaces';
+import { Patient } from '@/app/shared/interfaces';
+import { useAuth } from '@/app/shared/AuthContext';
 
 
 const PatientsKanbanPage: React.FC = () => {
@@ -16,61 +17,35 @@ const PatientsKanbanPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [authInitialized, setAuthInitialized] = useState(false);
+  const { firebaseUser, loading: authLoading } = useAuth();
 
-  // Fetch patients from Firebase
-  const fetchPatients = async () => {
-    if (!authInitialized) return; // Don't fetch if auth isn't ready yet
+  const fetchPatients = useCallback(async () => {
+    if (!firebaseUser) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      // Make sure user is signed in before fetching
-      const currentUser = authService.getCurrentUser();
-      if (!currentUser) {
-        setError("Debes iniciar sesión para ver tus pacientes");
-        setPatients([]);
-        return;
-      }
-      
       const fetchedPatients = await patientService.getAllPatients();
       setPatients(fetchedPatients);
     } catch (err) {
       console.error('Error fetching patients:', err);
-      // Don't show an error if it's just because user isn't authenticated
-      if ((err as any)?.message === "Debes iniciar sesión para ver tus pacientes") {
-        setPatients([]);
-      } else {
-        setError('Error al cargar los pacientes. Por favor, intenta nuevamente.');
-      }
+      setError('Error al cargar los pacientes. Por favor, intenta nuevamente.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [firebaseUser]);
 
-  // Wait for Firebase Auth to initialize before fetching data
   useEffect(() => {
-    const unsubscribe = authService.getAuth().onAuthStateChanged((user) => {
-      setAuthInitialized(true);
-      if (user) {
-        fetchPatients();
-      } else {
-        setIsLoading(false);
-        setPatients([]);
-        // Don't show an error - just show empty state
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Other useEffect to refresh data when needed
-  useEffect(() => {
-    if (authInitialized) {
+    if (authLoading) return;
+    
+    if (firebaseUser) {
       fetchPatients();
+    } else {
+      setIsLoading(false);
+      setPatients([]);
     }
-  }, [authInitialized]);
+  }, [firebaseUser, authLoading, fetchPatients]);
 
   // Función para formatear fechas
   const formatDate = (dateString: string | null | undefined): string => {

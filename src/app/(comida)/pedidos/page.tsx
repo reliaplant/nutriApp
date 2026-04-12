@@ -3,13 +3,13 @@
 // Importa solo lo necesario, elimina el check de autenticación
 import { useState, useEffect, useMemo } from "react";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "../shared/firebase"; // Importar referencia a la base de datos
+import { db } from "@/app/shared/firebase"; // Importar referencia a la base de datos
 import ArmarPedido from "./components/armarPedido";
 import ResumenPedido from "./components/resumen";
 import FormularioSalida from "./components/formularioSalida";
 import Entrega from "./components/entrega";
 import Confirmacion from "./components/confirmacion";
-import { OrderItem, Order, OrderSettings } from "../shared/interfaces";
+import { OrderItem, Order, OrderSettings } from "@/app/shared/interfaces";
 
 // Define default values in case settings can't be loaded
 const DEFAULT_SHIPPING_FEE = 100;

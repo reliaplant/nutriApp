@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Order } from "../../shared/interfaces";
+import { Order } from "@/app/shared/interfaces";
 
 interface FormularioSalidaProps {
   handleNext?: (data: Partial<Order>) => void;

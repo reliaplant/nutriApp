@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Refaccion } from '../shared/interfaces';
-import { refaccionService, storage } from '../shared/firebase';
+import { Refaccion } from '@/app/shared/interfaces';
+import { refaccionService, storage } from '@/app/shared/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface RefaccionModalProps {

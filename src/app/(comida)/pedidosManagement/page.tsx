@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { orderService, authService } from "../shared/firebase";
-import { Order } from "../shared/interfaces";
+import { orderService, authService } from "@/app/shared/firebase";
+import { Order } from "@/app/shared/interfaces";
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import PedidoDetalle from "./components/pedidoDetalle";

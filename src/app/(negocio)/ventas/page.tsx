@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
-import { clientesService } from "../clientes/clientes.service";
-import { productosService } from "../productos/productos.service";
+import { clientesService } from "@/app/(negocio)/clientes/clientes.service";
+import { productosService } from "@/app/(negocio)/productos/productos.service";
 import { pedidosService } from "./pedidos.service";
 import { Pedido } from "./pedido.interface";
-import { Cliente } from "../clientes/cliente.interface";
-import { Producto } from "../productos/producto.interface";
+import { Cliente } from "@/app/(negocio)/clientes/cliente.interface";
+import { Producto } from "@/app/(negocio)/productos/producto.interface";
 
 export default function VentasPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { OrderItem, OrderSummary } from "../../shared/interfaces";
+import { OrderItem, OrderSummary } from "@/app/shared/interfaces";
 import Image from "next/image";
 
 interface ResumenPedidoProps {

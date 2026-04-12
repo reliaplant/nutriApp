@@ -29,6 +29,7 @@ export interface NutritionUser {
 
 import React, { useState, useEffect } from 'react';
 import { authService, db, storage } from '@/app/shared/firebase';
+import { useAuth } from '@/app/shared/AuthContext';
 import { Timestamp } from 'firebase/firestore';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -66,39 +67,18 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [formData, setFormData] = useState<Partial<NutritionistProfile>>({});
+  const { firebaseUser, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    let isMounted = true;
+    if (authLoading) return;
     
-    const initializeAuth = async () => {
-      try {
-        setLoading(true);
-        // Esperamos a que la autenticación esté lista
-        const user = await authService.getAuthStatePromise();
-        
-        if (!isMounted) return;
-        
-        if (!user) {
-          router.replace('/login');
-          return;
-        }
-        
-        await loadProfile(user.uid);
-      } catch (err) {
-        if (isMounted) {
-          console.error("Error durante la inicialización:", err);
-          setError('Error al inicializar la autenticación');
-          setLoading(false);
-        }
-      }
-    };
-
-    initializeAuth();
+    if (!firebaseUser) {
+      router.replace('/login');
+      return;
+    }
     
-    return () => {
-      isMounted = false;
-    };
-  }, [router]);
+    loadProfile(firebaseUser.uid);
+  }, [firebaseUser, authLoading, router]);
 
   const loadProfile = async (uid: string) => {
     try {

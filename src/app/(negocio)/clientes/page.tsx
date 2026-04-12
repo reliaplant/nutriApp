@@ -5,10 +5,10 @@ import { Cliente } from "./cliente.interface";
 import { clientesService } from "./clientes.service";
 import { getPedidosPagadosPorCliente } from "./pedidosPagadosPorCliente";
 import { getUltimaFechaPedidoPorCliente } from "./ultimaFechaPedidoPorCliente";
-import { pedidosService } from "../ventas/pedidos.service";
-import { productosService } from "../productos/productos.service";
-import { Pedido } from "../ventas/pedido.interface";
-import { Producto } from "../productos/producto.interface";
+import { pedidosService } from "@/app/(negocio)/ventas/pedidos.service";
+import { productosService } from "@/app/(negocio)/productos/productos.service";
+import { Pedido } from "@/app/(negocio)/ventas/pedido.interface";
+import { Producto } from "@/app/(negocio)/productos/producto.interface";
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Refaccion, OrderItem } from "../../shared/interfaces";
-import { refaccionService } from "../../shared/firebase";
+import { Refaccion, OrderItem } from "@/app/shared/interfaces";
+import { refaccionService } from "@/app/shared/firebase";
 import Image from "next/image";
 
 interface ArmarPedidoProps {

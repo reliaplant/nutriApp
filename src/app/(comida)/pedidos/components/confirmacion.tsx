@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Order } from "../../shared/interfaces";
-import { orderService } from "../../shared/firebase";
+import { Order } from "@/app/shared/interfaces";
+import { orderService } from "@/app/shared/firebase";
 import Image from "next/image";
 
 interface ConfirmacionProps {

@@ -1,5 +1,5 @@
-import { pedidosService } from "../ventas/pedidos.service";
-import { Pedido } from "../ventas/pedido.interface";
+import { pedidosService } from "@/app/(negocio)/ventas/pedidos.service";
+import { Pedido } from "@/app/(negocio)/ventas/pedido.interface";
 
 export async function getPedidosPagadosPorCliente(): Promise<Record<string, number>> {
   const pedidos = await pedidosService.getAll();
