@@ -184,31 +184,31 @@ const MealItem: React.FC<MealItemProps> = ({
   };
 
   return (
-    <div className="border border-gray-200 bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="border border-gray-200 bg-white rounded-sm overflow-hidden">
       {/* Header: Categoría + Hora */}
-      <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-        <span className={`text-sm font-medium ${categoryColors[getDefaultCategory()].text}`}>
+      <div className="px-3 py-1.5 border-b border-gray-100 flex items-center justify-between">
+        <span className={`text-[11px] font-medium ${categoryColors[getDefaultCategory()].text}`}>
           {categoryLabels[getDefaultCategory()]}
           {meal.time && (
             <>
-              <span className="text-gray-400 mx-2">•</span>
-              <span className="text-gray-600">{meal.time}</span>
+              <span className="text-gray-300 mx-1.5">•</span>
+              <span className="text-gray-500 text-[11px]">{meal.time}</span>
             </>
           )}
         </span>
         
         <button
-          className="text-emerald-600 hover:text-emerald-700 text-xs flex items-center cursor-pointer hover:bg-green-50 p-1.5 rounded"
+          className="text-emerald-600 hover:text-emerald-700 text-[10px] flex items-center cursor-pointer hover:bg-emerald-50 p-1 rounded-sm"
           onClick={() => setIsMinimized(!isMinimized)}
         >
           {isMinimized ? (
             <>
-              <ChevronDown className="h-4 w-4 mr-1" />
+              <ChevronDown className="h-3 w-3 mr-0.5" />
               Expandir
             </>
           ) : (
             <>
-              <ChevronUp className="h-4 w-4 mr-1" />
+              <ChevronUp className="h-3 w-3 mr-0.5" />
               Minimizar
             </>
           )}
@@ -217,27 +217,27 @@ const MealItem: React.FC<MealItemProps> = ({
 
       {/* Options tabs */}
       {!isMinimized && (
-        <div className="px-4 pt-3 pb-0 border-b border-gray-100">
-          <div className="flex flex-row gap-2 overflow-x-auto pb-3">
+        <div className="px-3 pt-2 pb-0 border-b border-gray-100">
+          <div className="flex flex-row gap-1.5 overflow-x-auto pb-2">
             {meal.options.map((option, optionIndex) => (
               <button
                 key={optionIndex}
-                className={`flex items-center px-4 py-1.5 text-sm font-medium rounded-full border transition-all ${
+                className={`flex items-center px-3 py-1 text-[11px] font-medium rounded-sm border transition-all ${
                   meal.activeOptionIndex === optionIndex
-                    ? 'bg-green-600 text-white border-green-700'
-                    : 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100'
+                    ? 'bg-emerald-600 text-white border-emerald-700'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100'
                 }`}
                 onClick={() => setActiveOption(mealIndex, optionIndex)}
               >
                 Opción {optionIndex + 1} 
-                <span className="mx-1.5 opacity-60">|</span> 
+                <span className="mx-1 opacity-60">|</span> 
                 <span>
                   {option.ingredients.reduce((sum, ingredient) => sum + (Number(ingredient.calories || 0) * Number(ingredient.quantity || 0) / 100), 0).toFixed(0)} kcal
                 </span>
                 {option.isSelectedForSummary && (
                   <CalculatorCheck
-                    size={16}
-                    className={`ml-2 ${meal.activeOptionIndex === optionIndex ? "text-white" : "text-green-700"}`}
+                    size={13}
+                    className={`ml-1.5 ${meal.activeOptionIndex === optionIndex ? "text-white" : "text-emerald-700"}`}
                   />
                 )}
               </button>
@@ -245,7 +245,7 @@ const MealItem: React.FC<MealItemProps> = ({
 
             <button 
               onClick={() => addMealOption(mealIndex)}
-              className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-full border border-gray-200 flex items-center"
+              className="px-2.5 py-1 text-[11px] text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-sm border border-gray-200 flex items-center"
             >
               + Añadir opción
             </button>
@@ -255,12 +255,12 @@ const MealItem: React.FC<MealItemProps> = ({
 
       {/* Content section */}
       {!isMinimized && (
-        <div className="p-6">
+        <div className="p-3">
           {/* Controls and nutrition summary */}
           {meal.options.length > 0 && (
-            <div className="flex gap-3 items-center mb-5 flex-wrap">
+            <div className="flex gap-2 items-center mb-4 flex-wrap">
               {/* Switch para incluir en resumen nutricional */}
-              <div className="flex items-center bg-gray-50 p-1.5 px-2 rounded-lg hover:bg-green-50 transition-colors group">
+              <div className="flex items-center bg-gray-50 p-1 px-2 rounded-sm hover:bg-emerald-50 transition-colors group">
                 <div className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -271,13 +271,13 @@ const MealItem: React.FC<MealItemProps> = ({
                   />
                   <label
                     htmlFor={`use-for-summary-${mealIndex}-${meal.activeOptionIndex}`}
-                    className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white block cursor-pointer"
+                    className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer-checked:bg-emerald-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white block cursor-pointer"
                   ></label>
                 </div>
-                <label className="text-xs font-medium text-gray-700 ml-2 group-hover:text-green-700">
+                <label className="text-[11px] text-gray-600 ml-1.5 group-hover:text-emerald-700">
                   Para resumen nutricional
                 </label>
-                <CalculatorCheck size={16} className="text-green-600 ml-1" />
+                <CalculatorCheck size={13} className="text-emerald-600 ml-1" />
               </div>
 
               {/* Botón para guardar la opción actual */}
@@ -302,10 +302,10 @@ const MealItem: React.FC<MealItemProps> = ({
               {/* Eliminar opción actual si hay más de una */}
               {meal.options.length > 1 && (
                 <button
-                  className="text-red-500 hover:text-red-700 text-xs flex items-center cursor-pointer hover:bg-red-50 p-2 rounded-lg"
+                  className="text-red-400 hover:text-red-600 text-[11px] flex items-center cursor-pointer hover:bg-red-50 p-1.5 rounded-sm"
                   onClick={() => removeMealOption(mealIndex, meal.activeOptionIndex)}
                 >
-                  <TrashCan size={16} className="mr-1" />
+                  <TrashCan size={13} className="mr-1" />
                   Eliminar opción
                 </button>
               )}
@@ -313,15 +313,15 @@ const MealItem: React.FC<MealItemProps> = ({
           )}
 
           {/* Campos alineados con MealsBiblioteca */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Información básica */}
-            <div className="flex flex-col md:flex-row gap-4 items-start">
-              {/* Nombre de la comida - FORZADO PARA QUE FUNCIONE */}
+            <div className="flex flex-col md:flex-row gap-3 items-start">
+              {/* Nombre de la comida */}
               <div className="flex-grow">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la receta</label>
+                <label className="block text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-1">Nombre de la receta</label>
                 <input
                   type="text"
-                  className="w-full p-2 h-10 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-500"
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-sm focus:outline-none focus:border-emerald-400"
                   value={meals[mealIndex].name}
                   onChange={(e) => {
                     // Modificar directamente el estado primario
@@ -340,11 +340,11 @@ const MealItem: React.FC<MealItemProps> = ({
               </div>
 
               {/* Categoría */}
-              <div className="w-40">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+              <div className="w-36">
+                <label className="block text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-1">Categoría</label>
                 <div className="relative">
                   <select
-                    className="w-full p-2 h-10 pl-8 appearance-none rounded-full shadow-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-opacity-50"
+                    className="w-full px-2 py-1.5 pl-7 text-xs appearance-none rounded-sm font-medium cursor-pointer focus:outline-none"
                     value={meal.category || getDefaultCategory()}
                     onChange={(e) => {
                       const updatedMeals = [...meals];
@@ -392,9 +392,9 @@ const MealItem: React.FC<MealItemProps> = ({
 
             {/* Descripción */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+              <label className="block text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-1">Descripción</label>
               <textarea
-                className="w-full p-3 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-500"
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-sm focus:outline-none focus:border-emerald-400"
                 value={activeOption.content || ''}
                 onChange={(e) => handleContentChange(mealIndex, meal.activeOptionIndex, e.target.value)}
                 placeholder="Describe los ingredientes y cantidades detalladamente..."
@@ -405,10 +405,10 @@ const MealItem: React.FC<MealItemProps> = ({
             {/* Instrucciones */}
             <div>
               <div 
-                className="flex items-center cursor-pointer text-green-600 hover:text-green-700 mb-2" 
+                className="flex items-center cursor-pointer text-emerald-600 hover:text-emerald-700 mb-1" 
                 onClick={() => setShowInstructions(!showInstructions)}
               >
-                <h3 className="text-sm font-medium mr-2">Instrucciones de preparación</h3>
+                <h3 className="text-[11px] font-medium mr-1.5">Instrucciones de preparación</h3>
                 {showInstructions ? 
                   <ChevronDown className="h-4 w-4" /> : 
                   <ArrowUpRight className="h-4 w-4" />
@@ -417,7 +417,7 @@ const MealItem: React.FC<MealItemProps> = ({
               
               {showInstructions && (
                 <textarea
-                  className="w-full p-3 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-500"
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-sm focus:outline-none focus:border-emerald-400"
                   placeholder="Añade instrucciones de preparación para esta comida"
                   value={activeOption.instructions || ''}
                   onChange={(e) => handleInstructionsChange(mealIndex, meal.activeOptionIndex, e.target.value)}
@@ -428,20 +428,20 @@ const MealItem: React.FC<MealItemProps> = ({
 
             {/* Ingredientes */}
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-sm font-medium text-gray-700">Ingredientes</h3>
-                <div className="flex space-x-2">
+              <div className="flex justify-between items-center mb-1.5">
+                <h3 className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400">Ingredientes</h3>
+                <div className="flex space-x-1.5">
                   <button 
                     onClick={() => addIngredient(mealIndex, meal.activeOptionIndex)}
-                    className="bg-green-50 hover:bg-green-100 text-green-700 text-sm px-3 py-1 rounded-lg flex items-center"
+                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded-sm flex items-center"
                   >
-                    <Strawberry size={16} className="mr-2" />
+                    <Strawberry size={13} className="mr-1" />
                     Añadir ingrediente
                   </button>
                   <button 
                     onClick={generateTableFromAI}
                     className={`
-                        text-sm px-3 py-1 rounded-lg flex items-center relative group
+                        text-[11px] px-2 py-0.5 rounded-sm flex items-center relative group
                         ${activeOption?.content 
                             ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' 
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -478,21 +478,21 @@ const MealItem: React.FC<MealItemProps> = ({
               </div>
 
               {/* Tabla de ingredientes */}
-              <div className="border border-gray-200 rounded-lg overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 relative">
+              <div className="border border-gray-200 rounded-sm overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-100 relative">
                   <thead className="bg-gray-50">
                     <tr>
                       {["Ingrediente", "Cant(g)", "Cal", "Prot(g)", "Carbs(g)", "Grasas(g)", ""].map((header, i) => (
-                        <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th key={i} className="px-2 py-1.5 text-left text-[10px] font-medium text-gray-400 uppercase tracking-[0.1em]">
                           {header}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-gray-100">
                     {activeOption.ingredients.map((ingredient, ingredientIndex) => (
                       <tr key={ingredientIndex} className="hover:bg-gray-50">
-                        <td className="py-2 px-3 min-w-[180px] relative w-1/2" style={{ position: 'static' }}>
+                        <td className="py-1 px-2 min-w-[160px] relative w-1/2" style={{ position: 'static' }}>
                           <div className="relative">
                             <IngredientTypeahead
                               value={ingredient.name}
@@ -506,9 +506,9 @@ const MealItem: React.FC<MealItemProps> = ({
                         </td>
                         
                         {/* Cantidad (editable) */}
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <input
-                            className="w-16 p-1 border border-gray-200 rounded text-center"
+                            className="w-14 p-0.5 text-xs border border-gray-200 rounded-sm text-center"
                             type="number"
                             value={ingredient.quantity === 0 ? '' : ingredient.quantity || ''}
                             onChange={(e) => {
@@ -528,33 +528,33 @@ const MealItem: React.FC<MealItemProps> = ({
                         </td>
                         
                         {/* Valores calculados según la cantidad */}
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-2 py-1 text-center text-xs text-gray-600">
                           {Math.round((Number(ingredient.calories) * Number(ingredient.quantity)) / 100)}
                         </td>
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-2 py-1 text-center text-xs text-gray-600">
                           {((Number(ingredient.protein) * Number(ingredient.quantity)) / 100).toFixed(1)}
                         </td>
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-2 py-1 text-center text-xs text-gray-600">
                           {((Number(ingredient.carbs) * Number(ingredient.quantity)) / 100).toFixed(1)}
                         </td>
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-2 py-1 text-center text-xs text-gray-600">
                           {((Number(ingredient.fat) * Number(ingredient.quantity)) / 100).toFixed(1)}
                         </td>
                         
                         {/* Botón eliminar */}
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-2 py-1 text-center">
                           <button
                             onClick={() => removeIngredient(mealIndex, meal.activeOptionIndex, ingredientIndex)} 
-                            className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded"
+                            className="text-red-400 hover:text-red-600 p-0.5 hover:bg-red-50 rounded-sm"
                           >
-                            <TrashCan size={16} />
+                            <TrashCan size={13} />
                           </button>
                         </td>
                       </tr>
                     ))}
                     {activeOption.ingredients.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-3 py-4 text-center text-gray-500 text-sm">
+                        <td colSpan={7} className="px-2 py-3 text-center text-gray-400 text-[11px]">
                           No hay ingredientes. Añade uno para comenzar.
                         </td>
                       </tr>
@@ -564,22 +564,22 @@ const MealItem: React.FC<MealItemProps> = ({
                   {/* Total de nutrientes */}
                   <tfoot className="bg-gray-50">
                     <tr>
-                      <td className="px-3 py-2 font-medium" colSpan={2}>Total:</td>
-                      <td className="px-3 py-2 font-medium text-center">
+                      <td className="px-2 py-1.5 text-xs font-medium" colSpan={2}>Total:</td>
+                      <td className="px-2 py-1.5 text-xs font-medium text-center">
                         {Math.round(activeOption.ingredients
                           .reduce((sum, i) => sum + (Number(i.calories || 0) * Number(i.quantity || 0) / 100), 0))}
                       </td>
-                      <td className="px-3 py-2 font-medium text-center">
+                      <td className="px-2 py-1.5 text-xs font-medium text-center">
                         {activeOption.ingredients
                           .reduce((sum, i) => sum + (Number(i.protein || 0) * Number(i.quantity || 0) / 100), 0)
                           .toFixed(1)}g
                       </td>
-                      <td className="px-3 py-2 font-medium text-center">
+                      <td className="px-2 py-1.5 text-xs font-medium text-center">
                         {activeOption.ingredients
                           .reduce((sum, i) => sum + (Number(i.carbs || 0) * Number(i.quantity || 0) / 100), 0)
                           .toFixed(1)}g
                       </td>
-                      <td className="px-3 py-2 font-medium text-center">
+                      <td className="px-2 py-1.5 text-xs font-medium text-center">
                         {activeOption.ingredients
                           .reduce((sum, i) => sum + (Number(i.fat || 0) * Number(i.quantity || 0) / 100), 0)
                           .toFixed(1)}g
@@ -856,7 +856,7 @@ const Meals: React.FC<MealsProps> = ({
   };
 
   return (
-    <div className="w-full p-4 flex flex-col gap-4 bg-gray-50">
+    <div className="w-full p-3 flex flex-col gap-3 bg-gray-50">
       {/* Usar el componente MealItem para cada comida */}
       {meals.map((meal, mealIndex) => (
         <MealItem
@@ -885,10 +885,10 @@ const Meals: React.FC<MealsProps> = ({
       {/* Botón para añadir nueva comida */}
       <button 
         onClick={addMeal}
-        className="bg-white rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer text-gray-600 text-sm px-4 py-3 flex items-center justify-center transition-colors shadow-sm"
+        className="bg-white rounded-sm border border-gray-200 hover:bg-gray-50 cursor-pointer text-gray-500 text-[11px] px-3 py-2 flex items-center justify-center transition-colors"
       >
-        <Strawberry size={20} className="mr-2 text-green-600" />
-        Añadir Nueva Comida
+        <Strawberry size={14} className="mr-1.5 text-emerald-600" />
+        Añadir nueva comida
       </button>
     </div>
   );
