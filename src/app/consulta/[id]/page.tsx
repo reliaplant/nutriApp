@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   CheckmarkFilled, 
   TrashCan, 
@@ -9,11 +10,31 @@ import {
 import PrintNutritionPlan from '@/app/consulta/components/printPDF';
 import { useParams, useSearchParams } from 'next/navigation';
 import moment from 'moment';
-import Notas from '../components/notas';
 import Meals, { Meal } from '../components/meals';
-import NutritionalSummary from '../components/NutritionalSummary';
 import { patientService, consultationService, authService } from '@/app/shared/firebase';
 import { Patient, Consultation } from '@/app/shared/interfaces';
+
+// Constantes nutricionales
+const ACTIVITY_LEVELS: Record<string, { label: string; factor: number }> = {
+  'sedentary': { label: 'Sedentario', factor: 1.2 },
+  'light': { label: 'Ligeramente activo', factor: 1.375 },
+  'moderate': { label: 'Moderadamente activo', factor: 1.55 },
+  'active': { label: 'Muy activo', factor: 1.725 },
+  'very-active': { label: 'Extremadamente activo', factor: 1.9 }
+};
+
+const GOAL_OPTIONS = [
+  { value: 'lose-4', label: 'Perder 4kg/mes', goal: 'lose', weightGoal: 4 },
+  { value: 'lose-3', label: 'Perder 3kg/mes', goal: 'lose', weightGoal: 3 },
+  { value: 'lose-2', label: 'Perder 2kg/mes', goal: 'lose', weightGoal: 2 },
+  { value: 'lose-1', label: 'Perder 1kg/mes', goal: 'lose', weightGoal: 1 },
+  { value: 'maintain', label: 'Mantener peso', goal: 'maintain', weightGoal: 0 },
+  { value: 'gain-1', label: 'Ganar 1kg/mes', goal: 'gain', weightGoal: 1 },
+  { value: 'gain-2', label: 'Ganar 2kg/mes', goal: 'gain', weightGoal: 2 },
+  { value: 'gain-3', label: 'Ganar 3kg/mes', goal: 'gain', weightGoal: 3 },
+];
+
+const DEFAULT_MACROS = { protein: 30, carbs: 40, fat: 30 };
 
 export default function CrearPlan() {
   // Obtener IDs de paciente y consulta
@@ -32,15 +53,21 @@ export default function CrearPlan() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Estado de las comidas y nutrición total
-  const [meals, setMeals] = useState<Meal[]>([
-    
-  ]);
+  const [meals, setMeals] = useState<Meal[]>([]);
   
   const [totalNutrition, setTotalNutrition] = useState({
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fat: 0
+    calories: 0, protein: 0, carbs: 0, fat: 0
+  });
+
+  // Estados del resumen nutricional (inline)
+  const [editableData, setEditableData] = useState({
+    weight: 70, activityLevel: 'moderate', goal: 'maintain', weightGoal: 0
+  });
+  const [customMacros, setCustomMacros] = useState(DEFAULT_MACROS);
+  const [macrosAreCustomized, setMacrosAreCustomized] = useState(false);
+  const [isEditingData, setIsEditingData] = useState(false);
+  const [theoreticalValues, setTheoreticalValues] = useState({
+    bmr: 0, tdee: 0, dailyCalories: 0, dailyDeficit: 0, protein: 0, carbs: 0, fat: 0
   });
 
   // Lista de ingredientes comunes
@@ -64,10 +91,84 @@ export default function CrearPlan() {
     tdee: 0
   });
 
-  // Añadir esta función para manejar cambios en los parámetros
-  const handleNutritionParamsChange = (updatedParams: any) => {
-    console.log("Parámetros actualizados:", updatedParams);
-    setNutritionParams(updatedParams);
+  // Helper: valor combinado para el selector de objetivo
+  const getGoalSelectValue = () => {
+    if (editableData.goal === 'maintain') return 'maintain';
+    return `${editableData.goal}-${editableData.weightGoal}`;
+  };
+
+  // Calcular valores teóricos
+  const calculateTheoreticalValues = () => {
+    const gender = (patient?.gender === 'male' || patient?.gender === 'female') ? patient.gender : 'male';
+    const age = patient?.birthDate ? moment().diff(moment(patient.birthDate, 'YYYY-MM-DD'), 'years') : 30;
+    const height = patient?.height || 170;
+    const weight = editableData.weight;
+    const activityLevel = editableData.activityLevel;
+    const goal = editableData.goal;
+    const weightGoal = editableData.weightGoal;
+
+    let bmr = gender === 'male'
+      ? 10 * weight + 6.25 * height - 5 * age + 5
+      : 10 * weight + 6.25 * height - 5 * age - 161;
+
+    const activityFactor = ACTIVITY_LEVELS[activityLevel]?.factor || 1.55;
+    const tdee = bmr * activityFactor;
+    let dailyCalories = tdee;
+    let dailyDeficit = 0;
+
+    if (goal === 'lose' && weightGoal) {
+      dailyDeficit = Math.round((weightGoal * 7700) / 30);
+      dailyCalories = tdee - dailyDeficit;
+    } else if (goal === 'gain' && weightGoal) {
+      dailyDeficit = -Math.round((weightGoal * 7700) / 30);
+      dailyCalories = tdee - dailyDeficit;
+    }
+
+    const macros = macrosAreCustomized ? customMacros : DEFAULT_MACROS;
+    const protein = Math.round((dailyCalories * (macros.protein / 100)) / 4);
+    const carbs = Math.round((dailyCalories * (macros.carbs / 100)) / 4);
+    const fat = Math.round((dailyCalories * (macros.fat / 100)) / 9);
+
+    setTheoreticalValues({
+      bmr: Math.round(bmr), tdee: Math.round(tdee),
+      dailyCalories: Math.round(dailyCalories), dailyDeficit, protein, carbs, fat
+    });
+
+    setNutritionParams({
+      weight, activityLevel, goal, weightGoal,
+      macroDistribution: macros,
+      bmr: Math.round(bmr), tdee: Math.round(tdee)
+    });
+  };
+
+  // Manejo de cambios editables
+  const handleEditableChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name === 'weight') {
+      setEditableData(prev => ({ ...prev, weight: parseFloat(value) || prev.weight }));
+    } else {
+      setEditableData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleGoalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const opt = GOAL_OPTIONS.find(o => o.value === e.target.value);
+    if (opt) setEditableData(prev => ({ ...prev, goal: opt.goal, weightGoal: opt.weightGoal }));
+  };
+
+  const handleMacroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const numValue = parseInt(value, 10) || 0;
+    const updated = { ...customMacros, [name]: numValue };
+    const sum = Object.values(updated).reduce((a, b) => a + b, 0);
+    if (sum !== 100) {
+      const others = Object.keys(updated).filter(k => k !== name);
+      const finalTotal = numValue + others.reduce((t, f) => t + updated[f as keyof typeof updated], 0);
+      if (finalTotal !== 100 && others.length > 0) {
+        updated[others[0] as keyof typeof updated] += (100 - finalTotal);
+      }
+    }
+    setCustomMacros(updated);
   };
 
   // Cargar datos del paciente y consulta
@@ -171,14 +272,34 @@ export default function CrearPlan() {
     calculateTotalNutrition();
   }, [meals]);
 
+  // Sync editableData when patient loads
+  useEffect(() => {
+    if (patient) {
+      setEditableData(prev => ({
+        ...prev,
+        weight: nutritionParams.weight || patient.currentWeight || 70,
+        activityLevel: nutritionParams.activityLevel || 'moderate',
+        goal: nutritionParams.goal || 'maintain',
+        weightGoal: nutritionParams.weightGoal || 0
+      }));
+      if (nutritionParams.macroDistribution) {
+        setCustomMacros(nutritionParams.macroDistribution);
+        setMacrosAreCustomized(true);
+      }
+    }
+  }, [patient]);
+
+  // Recalcular cuando cambian datos editables
+  useEffect(() => {
+    if (!patient) return;
+    const timer = setTimeout(() => calculateTheoreticalValues(), 300);
+    return () => clearTimeout(timer);
+  }, [patient, editableData.weight, editableData.activityLevel,
+      editableData.goal, editableData.weightGoal, macrosAreCustomized, customMacros]);
+
   // Función para manejar cambios en las comidas
   const handleMealsChange = (updatedMeals: Meal[]) => {
     setMeals(updatedMeals);
-  };
-
-  // Función para manejar guardado de notas
-  const handleSaveNotes = (content: string) => {
-    setNotasContent(content);
   };
 
   // Guardar plan nutricional en Firebase
@@ -235,6 +356,29 @@ export default function CrearPlan() {
       <div className="flex flex-row">
         {/* Panel lateral sticky con pestañas */}
         <div className="w-1/4 h-[calc(100vh-40px)] sticky top-10 overflow-auto bg-white border-r border-gray-200">
+          {/* Header del paciente */}
+          {patient && (
+            <div>
+              <div className="px-3 pt-2 pb-1">
+                <Link href={`/detalle-paciente/${patientId}`} className="text-[10px] text-emerald-600 hover:underline">
+                  ← Perfil del paciente
+                </Link>
+              </div>
+              <div className="px-3 pb-2 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-semibold text-emerald-700">
+                    {patient.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-gray-800">
+                  {patient.name}
+                  <span className="pl-1 text-[10px] text-gray-400 font-normal">
+                    ({patient.gender === 'male' ? 'Masculino' : 'Femenino'})
+                  </span>
+                </p>
+              </div>
+            </div>
+          )}
           <div className="flex border-b border-gray-200">
             <button
               onClick={() => setActiveTab('summary')}
@@ -259,32 +403,185 @@ export default function CrearPlan() {
           </div>
           
           {/* Contenido del panel según la pestaña activa */}
-          <div className="overflow-auto">
+          <div>
             {activeTab === 'summary' ? (
-              <div className="p-3">
-                <NutritionalSummary
-                  patientData={patient ? {
-                    gender: (patient.gender === 'male' || patient.gender === 'female') ? patient.gender : 'male',
-                    age: patient.birthDate ? moment().diff(moment(patient.birthDate, 'YYYY-MM-DD'), 'years') : 30,
-                    height: patient.height || 170,
-                    weight: nutritionParams.weight || patient.currentWeight || 70,
-                    activityLevel: nutritionParams.activityLevel as any,
-                    goal: nutritionParams.goal as any,
-                    weightGoal: nutritionParams.weightGoal,
-                    name: patient.name
-                  } : undefined}
-                  totalNutrition={totalNutrition}
-                  showDetails={true}
-                  onNutritionParamsChange={handleNutritionParamsChange}
-                  initialMacroDistribution={nutritionParams.macroDistribution}
-                />
+              <div>
+                <div className="border-t border-gray-200"></div>
+
+                {/* Datos del paciente */}
+                <div className="px-3 py-2.5">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400">Datos del paciente</p>
+                    {!isEditingData ? (
+                      <button onClick={() => setIsEditingData(true)} className="text-[10px] text-emerald-600 hover:underline">Editar</button>
+                    ) : (
+                      <button onClick={() => { setMacrosAreCustomized(true); setIsEditingData(false); calculateTheoreticalValues(); }} className="text-[10px] text-emerald-600 hover:underline">Listo</button>
+                    )}
+                  </div>
+                  <div className="text-[11px] space-y-1.5">
+                    <div>
+                      <span className="text-gray-400">Altura:</span>
+                      <span className="ml-1 font-medium text-gray-700">{patient?.height || 170} cm</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Edad:</span>
+                      <span className="ml-1 font-medium text-gray-700">{patient?.birthDate ? moment().diff(moment(patient.birthDate, 'YYYY-MM-DD'), 'years') : 30} años</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="text-gray-400">Peso:</span>
+                      {isEditingData ? (
+                        <>
+                          <select name="weight" value={editableData.weight} onChange={handleEditableChange}
+                            className="ml-1 p-0 text-[11px] bg-transparent font-medium text-gray-700 focus:outline-none w-auto" style={{ width: 'auto' }}>
+                            {Array.from({ length: 80 }, (_, i) => i + 50).map(w => <option key={w} value={w}>{w}</option>)}
+                          </select>
+                          <span className="ml-0.5 text-gray-400">kg</span>
+                        </>
+                      ) : (
+                        <span className="ml-1 font-medium text-gray-700">{editableData.weight} kg</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Actividad:</span>
+                      {isEditingData ? (
+                        <select name="activityLevel" value={editableData.activityLevel} onChange={handleEditableChange}
+                          className="ml-1 p-0 text-[11px] bg-transparent font-medium text-gray-700 focus:outline-none w-auto" style={{ width: 'auto' }}>
+                          {Object.entries(ACTIVITY_LEVELS).map(([val, { label }]) => <option key={val} value={val}>{label}</option>)}
+                        </select>
+                      ) : (
+                        <span className="ml-1 font-medium text-gray-700">{ACTIVITY_LEVELS[editableData.activityLevel]?.label}</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Objetivo:</span>
+                      {isEditingData ? (
+                        <select value={getGoalSelectValue()} onChange={handleGoalChange}
+                          className="ml-1 p-0 text-[11px] bg-transparent font-medium text-gray-700 focus:outline-none w-auto" style={{ width: 'auto' }}>
+                          {GOAL_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                        </select>
+                      ) : (
+                        <span className="ml-1 font-medium text-gray-700">
+                          {GOAL_OPTIONS.find(o => o.value === getGoalSelectValue())?.label || 'Mantener peso'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200"></div>
+
+                {/* Requerimientos Energéticos */}
+                <div className="px-3 py-2.5">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-2">Requerimientos Energéticos</p>
+                  <div className="space-y-1 text-[11px]">
+                    <div><span className="text-gray-400">Metabolismo basal:</span><span className="ml-1 font-medium text-gray-700">{theoreticalValues.bmr} kcal</span></div>
+                    <div><span className="text-gray-400">Gasto total:</span><span className="ml-1 font-medium text-gray-700">{theoreticalValues.tdee} kcal</span></div>
+                    <div><span className="text-gray-400">Calorías objetivo:</span><span className="ml-1 font-medium text-gray-700">{theoreticalValues.dailyCalories} kcal/día</span></div>
+                    {theoreticalValues.dailyDeficit !== 0 && (
+                      <div className="text-[10px] text-red-400 mt-1">
+                        {theoreticalValues.dailyDeficit > 0
+                          ? <span>Déficit necesario: ~{theoreticalValues.dailyDeficit} kcal/día ({editableData.weightGoal} kg/mes)</span>
+                          : <span>Superávit necesario: ~{-theoreticalValues.dailyDeficit} kcal/día ({editableData.weightGoal} kg/mes)</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Distribución de macronutrientes */}
+                <div className="px-3 pb-2.5">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-2">Distribución de macronutrientes</p>
+                  {isEditingData ? (
+                    <div className="space-y-2">
+                      {[
+                        { name: 'protein' as const, label: 'Proteínas', color: 'red', value: customMacros.protein, grams: theoreticalValues.protein },
+                        { name: 'carbs' as const, label: 'Carbohidratos', color: 'amber', value: customMacros.carbs, grams: theoreticalValues.carbs },
+                        { name: 'fat' as const, label: 'Grasas', color: 'blue', value: customMacros.fat, grams: theoreticalValues.fat },
+                      ].map((macro) => (
+                        <div key={macro.name} className="flex items-center gap-2">
+                          <span className={`text-[10px] w-20 text-${macro.color}-500 font-medium`}>{macro.label}</span>
+                          <input type="range" name={macro.name} min="5" max="70" value={macro.value} onChange={handleMacroChange}
+                            className="flex-1 h-1 bg-gray-200 rounded-full appearance-none cursor-pointer accent-emerald-600" />
+                          <span className="text-[11px] font-medium text-gray-700 w-8 text-right">{macro.value}%</span>
+                          <span className="text-[10px] text-gray-400 w-10 text-right">{macro.grams}g</span>
+                        </div>
+                      ))}
+                      {(customMacros.protein + customMacros.carbs + customMacros.fat) !== 100 && (
+                        <p className="text-[10px] text-red-400">Total: {customMacros.protein + customMacros.carbs + customMacros.fat}% (debe ser 100%)</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><p className="text-[10px] text-gray-400">Proteínas</p><p className="text-xs font-medium text-gray-800">{customMacros.protein}%</p></div>
+                      <div><p className="text-[10px] text-gray-400">Carbohidratos</p><p className="text-xs font-medium text-gray-800">{customMacros.carbs}%</p></div>
+                      <div><p className="text-[10px] text-gray-400">Grasas</p><p className="text-xs font-medium text-gray-800">{customMacros.fat}%</p></div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Plan actual vs. Objetivo */}
+                <div className="px-3 py-2.5 border-t border-gray-200">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-2">Plan actual vs. Objetivo</p>
+                  <div className="space-y-2 text-[11px]">
+                    {[
+                      { label: 'Calorías', actual: totalNutrition.calories, target: theoreticalValues.dailyCalories, color: 'bg-emerald-500', unit: '' },
+                      { label: 'Proteínas', actual: totalNutrition.protein, target: theoreticalValues.protein, color: 'bg-red-400', unit: 'g' },
+                      { label: 'Carbohidratos', actual: totalNutrition.carbs, target: theoreticalValues.carbs, color: 'bg-amber-400', unit: 'g' },
+                      { label: 'Grasas', actual: Math.round(totalNutrition.fat), target: theoreticalValues.fat, color: 'bg-blue-400', unit: 'g' },
+                    ].map((item) => (
+                      <div key={item.label}>
+                        <div className="flex justify-between mb-1">
+                          <span>{item.label}</span>
+                          <div>
+                            <span className="font-medium">{item.actual || 0}{item.unit}</span>
+                            <span className="mx-1 text-gray-400">/</span>
+                            <span className="text-gray-500">{item.target}{item.unit}</span>
+                          </div>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-1">
+                          <div className={`${item.color} h-1 rounded-full`} style={{ width: `${Math.min(100, (item.actual || 0) / (item.target || 1) * 100)}%` }}></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
-              <Notas 
-                initialContent={notasContent}
-                onSave={handleSaveNotes}
-              />
+              /* Notas tab */
+              <div className="p-3">
+                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-2">Notas</p>
+                <textarea
+                  defaultValue={notasContent}
+                  onChange={(e) => setNotasContent(e.target.value)}
+                  placeholder="Escribe tus notas aquí..."
+                  className="w-full min-h-[calc(100vh-200px)] p-2 text-xs text-gray-700 border border-gray-200 rounded-sm resize-none focus:outline-none focus:border-emerald-300 placeholder:text-gray-300"
+                />
+              </div>
             )}
+          </div>
+
+          {/* Acciones: Imprimir + Guardar */}
+          <div className="border-t border-gray-200 px-3 py-2.5 flex flex-col gap-2">
+            <PrintNutritionPlan
+              patient={patient}
+              consultation={consultation}
+              meals={meals}
+              totalNutrition={totalNutrition}
+              notes={notasContent}
+              nutritionistName="Dr. Juan Pérez"
+              nutritionistId="CP-12345"
+            />
+            <button 
+              onClick={savePlan}
+              disabled={isSaving}
+              className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-sm text-[11px] flex items-center justify-center transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isSaving ? 'Guardando...' : (
+                <>
+                  <CheckmarkFilled size={14} className="mr-1.5" />
+                  Guardar Plan
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -295,32 +592,6 @@ export default function CrearPlan() {
             commonIngredients={COMMON_INGREDIENTS}
             onMealsChange={handleMealsChange}
           />
-
-          <PrintNutritionPlan
-            patient={patient}
-            consultation={consultation}
-            meals={meals}
-            totalNutrition={totalNutrition}
-            notes={notasContent}
-            nutritionistName="Dr. Juan Pérez"
-            nutritionistId="CP-12345"
-          />
-
-          {/* Botón de guardar */}
-          <div className="text-right mb-6">
-            <button 
-              onClick={savePlan}
-              disabled={isSaving}
-              className={`bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-sm text-[11px] flex items-center ml-auto transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {isSaving ? 'Guardando...' : (
-                <>
-                  <CheckmarkFilled size={14} className="mr-1.5" />
-                  Guardar Plan Nutricional
-                </>
-              )}
-            </button>
-          </div>
         </div>
       </div>
     </div>
