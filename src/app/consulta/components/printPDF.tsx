@@ -471,11 +471,11 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
   return (
     <button
       onClick={generatePDF}
-      className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors"
+      className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 text-white rounded-sm text-[11px] hover:bg-gray-700 transition-colors"
       disabled={loading}
     >
-      <Printer size={16} />
-      {loading ? "Generando documento..." : "Imprimir Plan Nutricional"}
+      <Printer size={13} />
+      {loading ? "Generando..." : "Imprimir Plan Nutricional"}
     </button>
   );
 };

@@ -272,108 +272,99 @@ const NutritionalSummary = ({
   };
 
   return (
-    <div className="p-1">
+    <div className="p-0.5">
       {/* Título */}
-      <div className="mb-3 flex justify-between items-center">
-        <div>
-          <span className="ml-1 font-bold">
-            {patientData.name || 'Paciente'}
-            <span className='pl-2 text-gray-500 font-light'>
-              ({patientData.gender === 'male' ? 'Masculino' : 'Femenino'})
-            </span>
+      <div className="mb-3">
+        <p className="text-xs font-semibold text-gray-800">
+          {patientData.name || 'Paciente'}
+          <span className="pl-1.5 text-[10px] text-gray-400 font-normal">
+            ({patientData.gender === 'male' ? 'Masculino' : 'Femenino'})
           </span>
-        </div>
+        </p>
       </div>
 
       {/* Datos del paciente con campos editables inline */}
-      <div className="p-1 rounded-md mb-3">
-        <div className="text-sm">
+      <div className="mb-3">
+        <div className="text-[11px] space-y-1.5">
 
-        <div className=''>
-          <span className="text-gray-500">Altura:</span>
-          <span className="ml-1 font-medium">{patientData.height} cm</span>
+        <div>
+          <span className="text-gray-400">Altura:</span>
+          <span className="ml-1 font-medium text-gray-700">{patientData.height} cm</span>
         </div>
-        <div className='mt-1.5'>
-          <span className="text-gray-500">Edad:</span>
-          <span className="ml-1 font-medium">{patientData.age} años</span>
+        <div>
+          <span className="text-gray-400">Edad:</span>
+          <span className="ml-1 font-medium text-gray-700">{patientData.age} años</span>
         </div>
 
-
-          <div className="mt-1">
-        <div className="flex items-center">
-          <span className="text-gray-500">Peso:</span>
-          <select
-            name="weight"
-            value={editableData.weight}
-            onChange={handleInputChange}
-            className="ml-1 p-0.5 text-sm bg-transparent inline-flex items-center font-medium focus:outline-none focus:text-blue-600 w-auto"
-            style={{ width: 'auto' }}
-          >
-            {Array.from({ length: 80 }, (_, i) => i + 50).map(weight => (
-            <option key={weight} value={weight}>{weight}</option>
-            ))}
-          </select>
-          <span className="ml-1">kg</span>
-        </div>
+          <div className="flex items-center">
+            <span className="text-gray-400">Peso:</span>
+            <select
+              name="weight"
+              value={editableData.weight}
+              onChange={handleInputChange}
+              className="ml-1 p-0 text-[11px] bg-transparent font-medium text-gray-700 focus:outline-none w-auto"
+              style={{ width: 'auto' }}
+            >
+              {Array.from({ length: 80 }, (_, i) => i + 50).map(weight => (
+              <option key={weight} value={weight}>{weight}</option>
+              ))}
+            </select>
+            <span className="ml-0.5 text-gray-400">kg</span>
           </div>
-          <div className="col-span-2 mt-1">
-        <span className="text-gray-500">Actividad:</span>
-        <div className="inline-block relative">
-          <select
-            name="activityLevel"
-            value={editableData.activityLevel}
-            onChange={handleInputChange}
-            className="ml-1 p-0.5 text-sm bg-transparent inline-flex items-center font-medium focus:outline-none focus:text-blue-600 w-auto"
-            style={{ width: 'auto' }}
-          >
-            {Object.entries(ACTIVITY_LEVELS).map(([value, { label }]) => (
-          <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <span className="text-gray-400">Actividad:</span>
+            <select
+              name="activityLevel"
+              value={editableData.activityLevel}
+              onChange={handleInputChange}
+              className="ml-1 p-0 text-[11px] bg-transparent font-medium text-gray-700 focus:outline-none w-auto"
+              style={{ width: 'auto' }}
+            >
+              {Object.entries(ACTIVITY_LEVELS).map(([value, { label }]) => (
+              <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
           </div>
-          <div className="col-span-2 mt-1">
-        <span className="text-gray-500">Objetivo:</span>
-        <div className="inline-block relative">
-          <select
-            value={getGoalSelectValue()}
-            onChange={handleGoalChange}
-            className="ml-1 p-0.5 text-sm bg-transparent inline-flex items-center font-medium focus:outline-none focus:text-blue-600 w-auto"
-            style={{ width: 'auto' }}
-          >
-            {GOAL_OPTIONS.map(option => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <span className="text-gray-400">Objetivo:</span>
+            <select
+              value={getGoalSelectValue()}
+              onChange={handleGoalChange}
+              className="ml-1 p-0 text-[11px] bg-transparent font-medium text-gray-700 focus:outline-none w-auto"
+              style={{ width: 'auto' }}
+            >
+              {GOAL_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
 
       {/* Información calórica y macronutrientes */}
-      <div className="rounded-md mb-3">
-        <h3 className="text-sm mb-2 font-bold  mt-6">Requerimientos Energéticos</h3>
+      <div className="mb-3">
+        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-2 mt-5">Requerimientos Energéticos</p>
 
-        <div className="flex flex-col gap-1.5 text-sm">
+        <div className="space-y-1 text-[11px]">
           <div>
-            <span className="text-gray-500">Metabolismo basal:</span>
-            <span className="ml-1 font-medium">{theoreticalValues.bmr} kcal</span>
+            <span className="text-gray-400">Metabolismo basal:</span>
+            <span className="ml-1 font-medium text-gray-700">{theoreticalValues.bmr} kcal</span>
           </div>
           <div>
-            <span className="text-gray-500">Gasto total:</span>
-            <span className="ml-1 font-medium">{theoreticalValues.tdee} kcal</span>
+            <span className="text-gray-400">Gasto total:</span>
+            <span className="ml-1 font-medium text-gray-700">{theoreticalValues.tdee} kcal</span>
           </div>
-          <div className="col-span-2">
-            <span className="text-gray-500">Calorías objetivo:</span>
-            <span className="ml-1 font-medium">{theoreticalValues.dailyCalories} kcal/día</span>
+          <div>
+            <span className="text-gray-400">Calorías objetivo:</span>
+            <span className="ml-1 font-medium text-gray-700">{theoreticalValues.dailyCalories} kcal/día</span>
           </div>
 
           {theoreticalValues.dailyDeficit !== 0 && (
-            <div className="rounded text-xs text-red50">
+            <div className="text-[10px] text-red-400 mt-1">
               {theoreticalValues.dailyDeficit > 0 ? (
-                <span>Para perder {editableData.weightGoal} kg/mes se necesita un déficit de aprox. {theoreticalValues.dailyDeficit} kcal/día</span>
+                <span>Déficit necesario: ~{theoreticalValues.dailyDeficit} kcal/día ({editableData.weightGoal} kg/mes)</span>
               ) : (
-                <span>Para ganar {editableData.weightGoal} kg/mes se necesita un superávit de aprox. {-theoreticalValues.dailyDeficit} kcal/día</span>
+                <span>Superávit necesario: ~{-theoreticalValues.dailyDeficit} kcal/día ({editableData.weightGoal} kg/mes)</span>
               )}
             </div>
           )}
@@ -383,26 +374,26 @@ const NutritionalSummary = ({
       {/* Distribución de macronutrientes */}
       <div className="mt-4">
         <div className="flex justify-between items-center mb-2">
-          <h3 className="text-sm font-medium text-gray-700">Distribución de macronutrientes</h3>
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400">Distribución de macronutrientes</p>
           
           {!isEditingMacros ? (
             <button
               onClick={handleCustomizeMacros}
-              className="text-xs text-blue-600 hover:text-blue-800"
+              className="text-[10px] text-emerald-600 hover:underline"
             >
-              {macrosAreCustomized ? "Editar" : "Personalizar"}
+              {macrosAreCustomized ? "Editar" : "Editar"}
             </button>
           ) : (
             <div className="flex space-x-2">
               <button
                 onClick={handleSaveMacros}
-                className="text-xs text-green-600 hover:text-green-800"
+                className="text-[10px] text-emerald-600 hover:underline"
               >
                 Guardar
               </button>
               <button
                 onClick={handleCancelMacros}
-                className="text-xs text-gray-600 hover:text-gray-800"
+                className="text-[10px] text-gray-400 hover:text-gray-600"
               >
                 Cancelar
               </button>
@@ -412,83 +403,83 @@ const NutritionalSummary = ({
         
         {/* Mostrar información de macros o controles de edición */}
         {isEditingMacros ? (
-          <div className="flex space-x-2 text-xs">
-            <div className="flex-1 border border-gray-200 rounded border overflow-hidden text-center">
-              <div className="bg-red-100/50 px-2 py-1 border-b border-red-200">
-                <span className="font-medium text-red-700">Proteínas</span>
+          <div className="flex space-x-1.5 text-[10px]">
+            <div className="flex-1 border border-gray-200 rounded-sm overflow-hidden text-center">
+              <div className="bg-red-50 px-1.5 py-0.5 border-b border-red-100">
+                <span className="font-medium text-red-600 text-[10px]">Proteínas</span>
               </div>
-              <div className="p-2 text-center">
+              <div className="p-1.5 text-center">
                 <div className="flex justify-center items-center">
                   <input 
                     type="number" 
                     name="protein"
                     value={customMacros.protein}
                     onChange={handleMacroChange}
-                    className="w-12 text-center border border-gray-200 rounded p-0.5 text-center"
+                    className="w-10 text-center border border-gray-200 rounded-sm p-0.5 text-[10px]"
                     min="10"
                     max="60"
                   />
-                  <span className="ml-0.5">%</span>
+                  <span className="ml-0.5 text-gray-400">%</span>
                 </div>
-                <div className="mt-1 font-bold text-sm">{theoreticalValues.protein}g</div>
+                <div className="mt-0.5 font-semibold text-xs text-gray-800">{theoreticalValues.protein}g</div>
               </div>
             </div>
             
-            <div className="flex-1 border border-gray-200 rounded border overflow-hidden text-center">
-              <div className="bg-amber-100/50 px-2 py-1 border-b border-amber-200">
-                <span className="font-medium text-amber-700">Carbos</span>
+            <div className="flex-1 border border-gray-200 rounded-sm overflow-hidden text-center">
+              <div className="bg-amber-50 px-1.5 py-0.5 border-b border-amber-100">
+                <span className="font-medium text-amber-600 text-[10px]">Carbos</span>
               </div>
-              <div className="p-2 text-center">
+              <div className="p-1.5 text-center">
                 <div className="flex justify-center items-center">
                   <input 
                     type="number" 
                     name="carbs"
                     value={customMacros.carbs}
                     onChange={handleMacroChange}
-                    className="w-12 text-center border border-gray-200 rounded p-0.5"
+                    className="w-10 text-center border border-gray-200 rounded-sm p-0.5 text-[10px]"
                     min="10"
                     max="70"
                   />
-                  <span className="ml-0.5">%</span>
+                  <span className="ml-0.5 text-gray-400">%</span>
                 </div>
-                <div className="mt-1 font-bold text-sm">{theoreticalValues.carbs}g</div>
+                <div className="mt-0.5 font-semibold text-xs text-gray-800">{theoreticalValues.carbs}g</div>
               </div>
             </div>
             
-            <div className="flex-1 border border-gray-200 rounded border overflow-hidden">
-              <div className="bg-blue-100/50 px-2 py-1 border-b border-blue-200">
-                <span className="font-medium text-blue-700">Grasas</span>
+            <div className="flex-1 border border-gray-200 rounded-sm overflow-hidden">
+              <div className="bg-blue-50 px-1.5 py-0.5 border-b border-blue-100">
+                <span className="font-medium text-blue-600 text-[10px]">Grasas</span>
               </div>
-              <div className="p-2 text-center">
+              <div className="p-1.5 text-center">
                 <div className="flex justify-center items-center">
                   <input 
                     type="number" 
                     name="fat"
                     value={customMacros.fat}
                     onChange={handleMacroChange}
-                    className="w-12 text-center border border-gray-200 rounded p-0.5"
+                    className="w-10 text-center border border-gray-200 rounded-sm p-0.5 text-[10px]"
                     min="10"
                     max="60"
                   />
-                  <span className="ml-0.5">%</span>
+                  <span className="ml-0.5 text-gray-400">%</span>
                 </div>
-                <div className="mt-1 font-bold text-sm">{theoreticalValues.fat}g</div>
+                <div className="mt-0.5 font-semibold text-xs text-gray-800">{theoreticalValues.fat}g</div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <div className="text-xs text-gray-500">Proteínas</div>
-              <div className="font-medium">{macrosAreCustomized ? customMacros.protein : DEFAULT_MACROS.protein}%</div>
+              <p className="text-[10px] text-gray-400">Proteínas</p>
+              <p className="text-xs font-medium text-gray-800">{macrosAreCustomized ? customMacros.protein : DEFAULT_MACROS.protein}%</p>
             </div>
             <div>
-              <div className="text-xs text-gray-500">Carbohidratos</div>
-              <div className="font-medium">{macrosAreCustomized ? customMacros.carbs : DEFAULT_MACROS.carbs}%</div>
+              <p className="text-[10px] text-gray-400">Carbohidratos</p>
+              <p className="text-xs font-medium text-gray-800">{macrosAreCustomized ? customMacros.carbs : DEFAULT_MACROS.carbs}%</p>
             </div>
             <div>
-              <div className="text-xs text-gray-500">Grasas</div>
-              <div className="font-medium">{macrosAreCustomized ? customMacros.fat : DEFAULT_MACROS.fat}%</div>
+              <p className="text-[10px] text-gray-400">Grasas</p>
+              <p className="text-xs font-medium text-gray-800">{macrosAreCustomized ? customMacros.fat : DEFAULT_MACROS.fat}%</p>
             </div>
           </div>
         )}
@@ -496,10 +487,10 @@ const NutritionalSummary = ({
 
       {/* Comparación con el plan actual - Solo si hay datos del plan */}
       {totalNutrition && showDetails && (
-        <div className="mt-6">
-          <h3 className="text-sm font-bold mb-2">Plan actual vs. Objetivo</h3>
+        <div className="mt-5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-2">Plan actual vs. Objetivo</p>
 
-          <div className="space-y-2 text-xs">
+          <div className="space-y-2 text-[11px]">
             <div>
               <div className="flex justify-between mb-1">
                 <span>Calorías</span>
@@ -509,9 +500,9 @@ const NutritionalSummary = ({
                   <span className="text-gray-500">{theoreticalValues.dailyCalories}</span>
                 </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1">
                 <div
-                  className="bg-green-500 h-1.5 rounded-full"
+                  className="bg-emerald-500 h-1 rounded-full"
                   style={{
                     width: `${Math.min(100, (totalNutrition.calories || 0) / theoreticalValues.dailyCalories * 100)}%`
                   }}
@@ -528,9 +519,9 @@ const NutritionalSummary = ({
                   <span className="text-gray-500">{theoreticalValues.protein}g</span>
                 </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1">
                 <div
-                  className="bg-red-500 h-1.5 rounded-full"
+                  className="bg-red-400 h-1 rounded-full"
                   style={{
                     width: `${Math.min(100, (totalNutrition.protein || 0) / theoreticalValues.protein * 100)}%`
                   }}
@@ -547,9 +538,9 @@ const NutritionalSummary = ({
                   <span className="text-gray-500">{theoreticalValues.carbs}g</span>
                 </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1">
                 <div
-                  className="bg-amber-500 h-1.5 rounded-full"
+                  className="bg-amber-400 h-1 rounded-full"
                   style={{
                     width: `${Math.min(100, (totalNutrition.carbs || 0) / theoreticalValues.carbs * 100)}%`
                   }}
@@ -566,9 +557,9 @@ const NutritionalSummary = ({
                   <span className="text-gray-500">{theoreticalValues.fat}g</span>
                 </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1">
                 <div
-                  className="bg-blue-500 h-1.5 rounded-full"
+                  className="bg-blue-400 h-1 rounded-full"
                   style={{
                     width: `${Math.min(100, (totalNutrition.fat || 0) / theoreticalValues.fat * 100)}%`
                   }}

@@ -219,37 +219,39 @@ export default function CrearPlan() {
   };
 
   if (loading) {
-    return <div className="text-center p-10">Cargando datos...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-600 border-t-transparent"></div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="text-center p-10 text-red-500">{error}</div>;
+    return <div className="p-4 bg-red-50 text-red-600 rounded-sm text-xs">{error}</div>;
   }
 
   return (
     <div className="flex flex-col">
-     
-
       <div className="flex flex-row">
         {/* Panel lateral sticky con pestañas */}
-        <div className="w-1/4 h-[calc(100vh-50px)] sticky top-13 overflow-auto bg-white shadow-md">
+        <div className="w-1/4 h-[calc(100vh-40px)] sticky top-10 overflow-auto bg-white border-r border-gray-200">
           <div className="flex border-b border-gray-200">
             <button
               onClick={() => setActiveTab('summary')}
-              className={`flex-1 py-3 text-sm font-medium ${
+              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
                 activeTab === 'summary' 
-                  ? 'text-emerald-600 border-b-3 border-emerald-600' 
-                  : 'text-gray-500 hover:text-emerald-900'
+                  ? 'text-emerald-600 border-b-2 border-emerald-600' 
+                  : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               Resumen
             </button>
             <button
               onClick={() => setActiveTab('notes')}
-              className={`flex-1 py-3 text-sm font-medium ${
+              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
                 activeTab === 'notes' 
-                  ? 'text-emerald-600 border-b-3 border-emerald-600' 
-                  : 'text-gray-500 hover:text-emerald-900'
+                  ? 'text-emerald-600 border-b-2 border-emerald-600' 
+                  : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               Notas
@@ -259,7 +261,7 @@ export default function CrearPlan() {
           {/* Contenido del panel según la pestaña activa */}
           <div className="overflow-auto">
             {activeTab === 'summary' ? (
-              <div className="p-4">
+              <div className="p-3">
                 <NutritionalSummary
                   patientData={patient ? {
                     gender: (patient.gender === 'male' || patient.gender === 'female') ? patient.gender : 'male',
@@ -269,7 +271,7 @@ export default function CrearPlan() {
                     activityLevel: nutritionParams.activityLevel as any,
                     goal: nutritionParams.goal as any,
                     weightGoal: nutritionParams.weightGoal,
-                    name: patient.name // Añadir esta línea para pasar el nombre del paciente
+                    name: patient.name
                   } : undefined}
                   totalNutrition={totalNutrition}
                   showDetails={true}
@@ -287,35 +289,33 @@ export default function CrearPlan() {
         </div>
 
         {/* Contenido principal del plan (a la derecha) */}
-        <div className="w-3/4 p-4 flex flex-col gap-4 bg-gray10">
-          {/* Integración del componente Meals */}
+        <div className="w-3/4 p-4 flex flex-col gap-3 bg-gray-50">
           <Meals 
             meals={meals}
             commonIngredients={COMMON_INGREDIENTS}
             onMealsChange={handleMealsChange}
           />
 
-
-<PrintNutritionPlan
-  patient={patient}
-  consultation={consultation}
-  meals={meals}
-  totalNutrition={totalNutrition}
-  notes={notasContent}
-  nutritionistName="Dr. Juan Pérez"
-  nutritionistId="CP-12345"
-/>
+          <PrintNutritionPlan
+            patient={patient}
+            consultation={consultation}
+            meals={meals}
+            totalNutrition={totalNutrition}
+            notes={notasContent}
+            nutritionistName="Dr. Juan Pérez"
+            nutritionistId="CP-12345"
+          />
 
           {/* Botón de guardar */}
-          <div className="text-right mb-8">
+          <div className="text-right mb-6">
             <button 
               onClick={savePlan}
               disabled={isSaving}
-              className={`bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded flex items-center ml-auto ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-sm text-[11px] flex items-center ml-auto transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {isSaving ? 'Guardando...' : (
                 <>
-                  <CheckmarkFilled size={16} className="mr-2" />
+                  <CheckmarkFilled size={14} className="mr-1.5" />
                   Guardar Plan Nutricional
                 </>
               )}
