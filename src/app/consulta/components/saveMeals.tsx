@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Check, ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { X, Save, Bookmark, Sparkles } from 'lucide-react';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db, authService } from '@/app/shared/firebase';
 import { MealOption } from '@/app/consulta/components/meals';
-import { categoryLabels, categoryColors, MealCategory } from '@/app/comidas/constants';
+import { categoryLabels, categoryColors, categoryIcons, MealCategory } from '@/app/comidas/constants';
 
 interface SaveMealOptionProps {
   mealName: string;
@@ -13,291 +13,279 @@ interface SaveMealOptionProps {
 
 const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSaveSuccess }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  // Usar el content como nombre inicial en lugar de combinarlo con la fecha
-  const [savedName, setSavedName] = useState(option.content || 'Nueva opción');
-  
-  // Determinar categoría inicial basada en el nombre de la comida o la hora
+  const [savedName, setSavedName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const getInitialCategory = (): MealCategory => {
-    if (!mealName) return 'general';
-    
-    const lowerName = mealName.toLowerCase();
-    
+    const lowerName = (mealName || '').toLowerCase();
     if (lowerName.includes('desayun')) return 'desayuno';
     if (lowerName.includes('media mañana')) return 'mediaManana';
     if (lowerName.includes('almuerz')) return 'almuerzo';
     if (lowerName.includes('lunch') || lowerName.includes('meriend')) return 'lunchTarde';
     if (lowerName.includes('cena')) return 'cena';
-    
     return 'general';
   };
 
   const [category, setCategory] = useState<MealCategory>(getInitialCategory());
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [justSaved, setJustSaved] = useState(false);
 
-  // Agregar ref para el menú desplegable
-  const categoryMenuRef = useRef<HTMLDivElement>(null);
-
-  // Cerrar el menú cuando se hace clic fuera
+  // Initial name suggestion based on content
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (categoryMenuRef.current && !categoryMenuRef.current.contains(event.target as Node)) {
-        setIsCategoryOpen(false);
-      }
+    if (isOpen) {
+      const suggested = option.name?.trim() || (option.content || '').split(/[.,\n]/)[0]?.trim().slice(0, 60) || '';
+      setSavedName(suggested);
+      setCategory(getInitialCategory());
+      setError('');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  // Cálculo de totales nutricionales — POR PORCIÓN (cantidad real)
+  const totalNutrition = useMemo(() => ({
+    calories: option.ingredients.reduce((s, i) => s + (Number(i.calories || 0) * Number(i.quantity || 0) / 100), 0),
+    protein:  option.ingredients.reduce((s, i) => s + (Number(i.protein  || 0) * Number(i.quantity || 0) / 100), 0),
+    carbs:    option.ingredients.reduce((s, i) => s + (Number(i.carbs    || 0) * Number(i.quantity || 0) / 100), 0),
+    fat:      option.ingredients.reduce((s, i) => s + (Number(i.fat      || 0) * Number(i.quantity || 0) / 100), 0),
+  }), [option.ingredients]);
+
+  const macroPct = useMemo(() => {
+    const pCal = totalNutrition.protein * 4;
+    const cCal = totalNutrition.carbs * 4;
+    const fCal = totalNutrition.fat * 9;
+    const total = pCal + cCal + fCal || 1;
+    return {
+      p: (pCal / total) * 100,
+      c: (cCal / total) * 100,
+      f: (fCal / total) * 100,
     };
+  }, [totalNutrition]);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Cálculo de totales nutricionales
-  const totalNutrition = {
-    calories: option.ingredients.reduce((sum, ing) => sum + (ing.calories || 0), 0),
-    protein: option.ingredients.reduce((sum, ing) => sum + (ing.protein || 0), 0),
-    carbs: option.ingredients.reduce((sum, ing) => sum + (ing.carbs || 0), 0),
-    fat: option.ingredients.reduce((sum, ing) => sum + (ing.fat || 0), 0)
-  };
-
-  const categories: { id: MealCategory; name: string }[] = Object.entries(categoryLabels).map(([id, name]) => ({
-    id: id as MealCategory,
-    name
-  }));
-
-  // Verificar si la opción es válida para guardar
-  const hasValidIngredients = option.ingredients && 
-    option.ingredients.length > 0 && 
-    option.ingredients.every(ing => ing.name.trim() !== '');
-
-  const getErrorMessage = () => {
-    if (!option.ingredients || option.ingredients.length === 0) {
-      return 'Debes agregar al menos un ingrediente';
-    }
-    if (!hasValidIngredients) {
-      return 'Todos los ingredientes deben tener un nombre';
-    }
-    return '';
-  };
-
-  // Mostrar mensaje de error si no hay ingredientes o están vacíos
-  const errorMessage = getErrorMessage();
+  const hasValidIngredients = option.ingredients?.length > 0 && option.ingredients.every(ing => ing.name.trim() !== '');
+  const canSave = hasValidIngredients && savedName.trim().length > 0;
 
   const handleSave = async () => {
-    // Validación adicional antes de guardar
-    if (!hasValidIngredients || !savedName.trim()) {
-      setError('Debes agregar al menos un ingrediente antes de guardar');
+    if (!canSave) {
+      setError(!hasValidIngredients ? 'Necesitas al menos un ingrediente con nombre' : 'Ingresa un nombre');
       return;
     }
-
     setError('');
     setIsSaving(true);
-    
     try {
       const user = authService.getCurrentUser();
       if (!user) {
-        setError('Debes iniciar sesión para guardar opciones de comida');
+        setError('Debes iniciar sesión para guardar');
         setIsSaving(false);
         return;
       }
-      
-      const savedOptionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      
-      await setDoc(doc(db, `users/${user.uid}/savedMealOptions`, savedOptionId), {
+      const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      await setDoc(doc(db, `users/${user.uid}/savedMealOptions`, id), {
         name: savedName.trim(),
         category,
-        mealOption: option,
+        mealOption: { ...option, name: savedName.trim() },
         totalNutrition,
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
       });
-      
-      setIsOpen(false);
-      if (onSaveSuccess) onSaveSuccess();
-      
+      setJustSaved(true);
+      setTimeout(() => {
+        setJustSaved(false);
+        setIsOpen(false);
+        if (onSaveSuccess) onSaveSuccess();
+      }, 900);
     } catch (err) {
-      console.error('Error al guardar opción de comida:', err);
-      setError('Error al guardar. Por favor intenta de nuevo.');
+      console.error('Error al guardar opción:', err);
+      setError('Error al guardar. Intenta de nuevo.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const hasIngredients = option.ingredients && option.ingredients.length > 0;
+  const categories = Object.entries(categoryLabels) as [MealCategory, string][];
 
   return (
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="text-green-600 hover:text-green-700 flex items-center p-2 rounded-md hover:bg-green-50 text-xs"
-        title="Guardar esta opción para usar después"
+        className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors text-gray-600 bg-white hover:text-emerald-700 hover:bg-emerald-50"
+        style={{ border: '1px solid #E8E5DE' }}
+        title="Guardar para reutilizar"
       >
-        <Save className="w-4 h-4 mr-1" />
-        Guardar opción
+        <Bookmark className="w-3 h-3" />
+        Guardar
       </button>
-      
+
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-green-50/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
-            {/* Header con título y botón cerrar */}
-            <div className="flex justify-between items-center px-6 py-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-800">Guardar opción de comida</h3>
-              <button 
-                onClick={() => setIsOpen(false)} 
-                className="text-gray-500 hover:text-gray-700 transition-colors rounded-full hover:bg-gray-100 p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6">
-              {error && (
-                <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100">
-                  {error}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !isSaving && setIsOpen(false)}>
+          <div
+            className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden flex flex-col"
+            style={{ border: '1px solid #E8E5DE' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header — minimalista */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ backgroundColor: '#F0FDF4' }}>
+                  <Bookmark className="w-3.5 h-3.5 text-emerald-700" />
                 </div>
-              )}
-
-              {errorMessage && (
-                <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100 flex items-center">
-                  <span className="text-red-600 mr-2">⚠️</span>
-                  {errorMessage}
-                </div>
-              )}
-              
-              {/* Nombre y Categoría en la misma línea */}
-              <div className="flex gap-4 mb-6">
-                <div className="flex-grow">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la receta</label>
-                  <input
-                    type="text"
-                    className="w-full py-2.5 px-3 border border-gray-300 rounded-lg"
-                    value={savedName}
-                    onChange={(e) => setSavedName(e.target.value)}
-                    placeholder="Ej: Pollo con arroz y vegetales"
-                  />
-                </div>
-                <div className="w-52 relative" ref={categoryMenuRef}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                  <button
-                    type="button"
-                    onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                    className={`
-                      w-full flex items-center justify-between px-3 py-2.5 
-                      border border-gray-300 rounded-lg bg-white
-                      hover:bg-gray-50 transition-colors
-                      ${categoryColors[category].text}
-                    `}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span 
-                        className={`w-2 h-2 rounded-full ${categoryColors[category].bg}`}
-                      />
-                      {categoryLabels[category]}
-                    </span>
-                    <ChevronDown size={16} className={`transition-transform ${isCategoryOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {/* Menú desplegable mejorado */}
-                  {isCategoryOpen && (
-                    <div className="absolute z-50 w-full mt-1 py-1 bg-white rounded-lg shadow-lg border border-gray-200">
-                      {Object.entries(categoryLabels).map(([id, name]) => (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => {
-                            setCategory(id as MealCategory);
-                            setIsCategoryOpen(false);
-                          }}
-                          className={`
-                            w-full flex items-center gap-2 px-3 py-2 text-sm
-                            hover:bg-gray-50 transition-colors
-                            ${category === id ? `${categoryColors[id as MealCategory].text} font-medium` : 'text-gray-700'}
-                          `}
-                        >
-                          <span 
-                            className={`
-                              w-2 h-2 rounded-full
-                              ${categoryColors[id as MealCategory].bg}
-                            `}
-                          />
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">Guardar receta</h3>
+                  <p className="text-[10px] text-gray-500 leading-tight">Disponible en todas tus consultas</p>
                 </div>
               </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                disabled={isSaving}
+                className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors p-1 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              {/* Descripción */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción detallada</label>
-                <textarea
-                  className="w-full p-3 border border-gray-300 rounded-lg text-sm"
-                  value={option.content || ''}
-                  rows={2}
-                  readOnly
-                  placeholder="Descripción detallada de los ingredientes y cantidades"
+            {/* Body */}
+            <div className="px-5 pb-4 space-y-4">
+              {/* Nombre */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">Nombre</label>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="w-full py-2 px-3 bg-white border border-gray-300 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 placeholder:text-gray-400"
+                  value={savedName}
+                  onChange={(e) => setSavedName(e.target.value)}
+                  placeholder="Ej: Pollo a la plancha con quinoa"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && canSave) handleSave(); }}
                 />
               </div>
 
-              {/* Resumen nutricional en tarjetas */}
-              <div className="grid grid-cols-4 gap-3 mb-6">
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <span className="block text-xs text-gray-500 mb-1">Calorías</span>
-                  <span className="text-lg font-bold text-gray-900">{Math.round(totalNutrition.calories)}</span>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <span className="block text-xs text-gray-500 mb-1">Proteína</span>
-                  <span className="text-lg font-bold text-gray-900">{totalNutrition.protein.toFixed(1)}g</span>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <span className="block text-xs text-gray-500 mb-1">Carbos</span>
-                  <span className="text-lg font-bold text-gray-900">{totalNutrition.carbs.toFixed(1)}g</span>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <span className="block text-xs text-gray-500 mb-1">Grasas</span>
-                  <span className="text-lg font-bold text-gray-900">{totalNutrition.fat.toFixed(1)}g</span>
+              {/* Categoría — pills */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">Categoría</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {categories.map(([id, name]) => {
+                    const isActive = category === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setCategory(id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                          isActive
+                            ? 'bg-emerald-600 text-white border-emerald-600'
+                            : 'bg-white text-gray-600 hover:border-emerald-400 hover:text-emerald-700'
+                        }`}
+                        style={{ border: isActive ? undefined : '1px solid #E8E5DE' }}
+                      >
+                        <img src={`/icons/${categoryIcons[id]}.svg`} alt="" className={`w-3.5 h-3.5 ${isActive ? '' : 'opacity-80'}`} />
+                        {name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Información adicional colapsada */}
-              <div className="text-xs text-gray-500 mb-6">
-                {option.instructions && 'Incluye instrucciones de preparación'}
+              {/* Preview de la receta */}
+              <div className="rounded-md p-3" style={{ backgroundColor: '#FAF9F7', border: '1px solid #F0EDE8' }}>
+                <div className="flex items-baseline justify-between mb-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Resumen nutricional</span>
+                  <span className="text-[10px] text-gray-500 tabular-nums">{option.ingredients.length} ingrediente{option.ingredients.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex items-end justify-between mb-3">
+                  <div>
+                    <div className="text-2xl font-bold text-gray-900 tabular-nums leading-none">{Math.round(totalNutrition.calories)}</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">kcal · porción</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-right">
+                    <div>
+                      <div className="text-[10px] text-gray-500 font-medium">Prot</div>
+                      <div className="text-xs font-semibold text-gray-800 tabular-nums">{totalNutrition.protein.toFixed(0)}g</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 font-medium">Carb</div>
+                      <div className="text-xs font-semibold text-gray-800 tabular-nums">{totalNutrition.carbs.toFixed(0)}g</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 font-medium">Grasa</div>
+                      <div className="text-xs font-semibold text-gray-800 tabular-nums">{totalNutrition.fat.toFixed(0)}g</div>
+                    </div>
+                  </div>
+                </div>
+                {/* Distribución macros */}
+                <div className="flex h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#F0EDE8' }}>
+                  <div className="bg-red-400" style={{ width: `${macroPct.p}%` }} />
+                  <div className="bg-amber-400" style={{ width: `${macroPct.c}%` }} />
+                  <div className="bg-blue-400" style={{ width: `${macroPct.f}%` }} />
+                </div>
+                <div className="flex justify-between text-[9px] text-gray-500 mt-1 tabular-nums">
+                  <span>{macroPct.p.toFixed(0)}% prot</span>
+                  <span>{macroPct.c.toFixed(0)}% carb</span>
+                  <span>{macroPct.f.toFixed(0)}% grasa</span>
+                </div>
               </div>
-              
-              {/* Botones */}
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  className={`
-                    px-4 py-2 rounded-lg font-medium flex items-center
-                    ${hasValidIngredients && savedName.trim()
-                      ? 'bg-green-600 text-white hover:bg-green-700'
+
+              {/* Ingredientes preview */}
+              {option.ingredients.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {option.ingredients.slice(0, 6).map((ing, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-gray-700 bg-white" style={{ border: '1px solid #E8E5DE' }}>
+                        {ing.icon && <img src={`/icons/${ing.icon}.svg`} alt="" className="w-3 h-3" />}
+                        {ing.name}
+                      </span>
+                    ))}
+                    {option.ingredients.length > 6 && (
+                      <span className="text-[10px] text-gray-500">+{option.ingredients.length - 6} más</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="px-3 py-2 bg-red-50 text-red-700 rounded text-[11px] border border-red-200">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 px-5 py-3 bg-gray-50" style={{ borderTop: '1px solid #E8E5DE' }}>
+              <button
+                type="button"
+                className="px-3 py-1.5 border border-gray-300 rounded text-gray-700 bg-white hover:bg-gray-100 text-[12px] font-medium transition-colors"
+                onClick={() => setIsOpen(false)}
+                disabled={isSaving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`px-4 py-1.5 rounded text-[12px] font-semibold flex items-center gap-1.5 transition-colors ${
+                  justSaved
+                    ? 'bg-emerald-600 text-white'
+                    : canSave && !isSaving
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }
-                  `}
-                  onClick={handleSave}
-                  disabled={!hasValidIngredients || !savedName.trim() || isSaving}
-                  title={errorMessage || (!savedName.trim() ? "Ingresa un nombre para la opción" : "")}
-                >
-                  {isSaving ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Guardar
-                    </>
-                  )}
-                </button>
-              </div>
+                }`}
+                onClick={handleSave}
+                disabled={!canSave || isSaving}
+              >
+                {justSaved ? (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Guardado
+                  </>
+                ) : isSaving ? (
+                  <>
+                    <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Guardando…
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    Guardar receta
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

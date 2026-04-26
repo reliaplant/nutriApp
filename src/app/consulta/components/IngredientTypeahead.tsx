@@ -9,6 +9,7 @@ export interface Ingredient {
   protein: number;
   carbs: number;
   fat: number;
+  icon?: string;
 }
 
 interface IngredientTypeaheadProps {
@@ -26,21 +27,27 @@ const IngredientTypeahead = ({
 }: IngredientTypeaheadProps) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<Ingredient[]>([]);
+  const [localValue, setLocalValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   
   // Actualizar sugerencias cuando cambia el valor
   useEffect(() => {
-    if (value.length >= 2) {
+    if (localValue.length >= 2) {
       const filtered = ingredients.filter(ingredient => 
-        ingredient.name.toLowerCase().includes(value.toLowerCase())
+        ingredient.name.toLowerCase().includes(localValue.toLowerCase())
       );
-      setSuggestions(filtered.slice(0, 8)); // Limitar a 8 sugerencias
+      setSuggestions(filtered.slice(0, 8));
     } else {
       setSuggestions([]);
     }
-  }, [value, ingredients]);
+  }, [localValue, ingredients]);
+
+  // Sync external value
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
   
   // Calcular la posición del dropdown
   useEffect(() => {
@@ -76,27 +83,38 @@ const IngredientTypeahead = ({
     return createPortal(
       <div 
         ref={containerRef}
-        className="fixed bg-white shadow-2xl rounded-md border border-gray-300 max-h-64 overflow-y-auto z-[9999]"
+        className="fixed rounded-sm max-h-52 overflow-y-auto z-[9999]"
         style={{
           top: `${position.top}px`,
           left: `${position.left}px`,
           width: `${position.width}px`,
-          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1)"
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E8E5DE',
+          boxShadow: "0 12px 32px -4px rgba(0, 0, 0, 0.12), 0 4px 8px -2px rgba(0, 0, 0, 0.06)"
         }}
       >
         {suggestions.map((suggestion, idx) => (
           <div 
             key={idx} 
-            className="p-2 hover:bg-emerald-50 cursor-pointer border-b last:border-b-0 border-gray-200"
+            className="px-2.5 py-1.5 cursor-pointer transition-colors flex items-center gap-2"
+            style={{ borderTop: idx > 0 ? '1px solid #F0EDE8' : 'none' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FAF9F7'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             onClick={() => {
               onSelectIngredient(suggestion);
               onChange(suggestion.name);
+              setLocalValue('');
               setShowSuggestions(false);
             }}
           >
-            <div className="font-medium">{suggestion.name}</div>
-            <div className="text-xs text-gray-500">
-              {suggestion.calories} cal | {suggestion.protein}g prot | {suggestion.carbs}g carbs | {suggestion.fat}g grasas
+            {suggestion.icon && (
+              <img src={`/icons/${suggestion.icon}.svg`} alt="" className="w-5 h-5 flex-shrink-0" />
+            )}
+            <div className="min-w-0">
+              <div className="text-xs font-medium" style={{ color: '#2D2B28' }}>{suggestion.name}</div>
+              <div className="text-[10px]" style={{ color: '#8B8680' }}>
+                {suggestion.calories} cal · {suggestion.protein}g prot · {suggestion.carbs}g carb · {suggestion.fat}g grasa
+              </div>
             </div>
           </div>
         ))}
@@ -109,11 +127,15 @@ const IngredientTypeahead = ({
     <div className="w-full">
       <input
         ref={inputRef}
-        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-2.5 py-1.5 text-xs rounded-sm focus:outline-none focus:ring-1 focus:ring-emerald-200 transition-shadow"
+        style={{ backgroundColor: '#FFFFFF', border: '1px solid #CCC9C3', color: '#2D2B28' }}
+        value={localValue}
+        onChange={(e) => {
+          setLocalValue(e.target.value);
+          onChange(e.target.value);
+        }}
         onFocus={() => setShowSuggestions(true)}
-        placeholder="Buscar ingrediente..."
+        placeholder="🔍 Buscar ingrediente..."
       />
       
       {renderSuggestions()}

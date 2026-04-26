@@ -1,40 +1,52 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { format, parseISO, isAfter, isBefore, isToday, isPast, isFuture, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { format, parseISO, isToday, isPast, isWithinInterval, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
+import { es, ptBR } from 'date-fns/locale';
 import { patientService } from '@/app/shared/firebase';
 import { useRouter } from 'next/navigation';
 import { Patient } from '@/app/shared/interfaces';
 import { useAuth } from '@/app/shared/AuthContext';
+import { useTranslation } from '@/app/shared/useTranslation';
+import {
+  Search, LayoutGrid, Table as TableIcon, PlusCircle, ChevronRight,
+  AlertCircle, CheckCircle2,
+  Mail, Phone
+} from 'lucide-react';
 
+type ViewMode = 'list' | 'kanban';
+type StatusFilter = 'all' | 'active' | 'discharged' | 'lost';
 
-const PatientsKanbanPage: React.FC = () => {
+const PatientsPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { firebaseUser, loading: authLoading } = useAuth();
   const [newPatientName, setNewPatientName] = useState('');
   const [creatingPatient, setCreatingPatient] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const { firebaseUser, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { t, lang } = useTranslation();
+  const dfLocale = lang === 'pt' ? ptBR : es;
 
   const fetchPatients = useCallback(async () => {
     if (!firebaseUser) return;
-    
     setIsLoading(true);
     setError(null);
-    
     try {
-      const fetchedPatients = await patientService.getAllPatients();
-      setPatients(fetchedPatients);
+      const fetched = await patientService.getAllPatients();
+      setPatients(fetched);
     } catch (err) {
-      console.error('Error fetching patients:', err);
-      setError('Error al cargar los pacientes. Por favor, intenta nuevamente.');
+      console.error(err);
+      setError(t('patients.loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -42,364 +54,408 @@ const PatientsKanbanPage: React.FC = () => {
 
   useEffect(() => {
     if (authLoading) return;
-    
-    if (firebaseUser) {
-      fetchPatients();
-    } else {
-      setIsLoading(false);
-      setPatients([]);
-    }
+    if (firebaseUser) fetchPatients();
+    else { setIsLoading(false); setPatients([]); }
   }, [firebaseUser, authLoading, fetchPatients]);
 
-  // Función para formatear fechas
-  const formatDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return 'No programada';
-    return format(parseISO(dateString), "d 'de' MMMM, yyyy - HH:mm", { locale: es });
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+  const formatDate = (s: string | null | undefined): string => {
+    if (!s) return t('patients.noAppointment');
+    return format(parseISO(s), "d MMM · HH:mm", { locale: dfLocale });
   };
 
-  // Filtrar pacientes según criterios de búsqueda
-  const filteredPatients = patients.filter(patient =>
-    patient.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredPatients = useMemo(() => {
+    return patients.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [patients, searchTerm, statusFilter]);
+
+  const sortedPatients = useMemo(() => {
+    return [...filteredPatients].sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      if (a.nextAppointmentDate && !b.nextAppointmentDate) return -1;
+      if (!a.nextAppointmentDate && b.nextAppointmentDate) return 1;
+      if (a.nextAppointmentDate && b.nextAppointmentDate) {
+        return parseISO(a.nextAppointmentDate).getTime() - parseISO(b.nextAppointmentDate).getTime();
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredPatients]);
+
+  const getStatusBadge = (patient: Patient) => {
+    if (patient.status === 'active') {
+      return <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">{t('patients.status.active')}</span>;
+    }
+    if (patient.status === 'discharged') {
+      return <span className="text-[10px] uppercase tracking-wider text-blue-600 font-medium">{t('patients.status.discharged')}</span>;
+    }
+    if (patient.status === 'lost') {
+      return <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">{t('patients.status.lost')}</span>;
+    }
+    return null;
+  };
+
+  // ─── Kanban columns ──────────────────────────────────────────────────────
+  type KanbanCol = { key: string; label: string; subtitle?: string; iconSvg: string; patients: Patient[] };
+  const kanbanColumns: KanbanCol[] = useMemo(() => {
+    const search = patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const now = new Date();
+    const thisWeekStart = startOfWeek(now,        { weekStartsOn: 1 });
+    const thisWeekEnd   = endOfWeek(now,          { weekStartsOn: 1 });
+    const nextWeekStart = startOfWeek(addWeeks(now, 1), { weekStartsOn: 1 });
+    const nextWeekEnd   = endOfWeek(addWeeks(now, 1),   { weekStartsOn: 1 });
+
+    const inThisWeek = (s: string) => isWithinInterval(parseISO(s), { start: thisWeekStart, end: thisWeekEnd });
+    const inNextWeek = (s: string) => isWithinInterval(parseISO(s), { start: nextWeekStart, end: nextWeekEnd });
+
+    const fmtRange = (a: Date, b: Date) => {
+      const sameMonth = a.getMonth() === b.getMonth();
+      return sameMonth
+        ? `${format(a, 'd', { locale: dfLocale })}–${format(b, "d 'de' MMM", { locale: dfLocale })}`
+        : `${format(a, 'd MMM', { locale: dfLocale })} – ${format(b, 'd MMM', { locale: dfLocale })}`;
+    };
+
+    return [
+      {
+        key: 'thisWeek', label: t('patients.kanban.thisWeek'), subtitle: fmtRange(thisWeekStart, thisWeekEnd), iconSvg: 'manzana',
+        patients: search.filter(p => p.status === 'active' && p.nextAppointmentDate && inThisWeek(p.nextAppointmentDate)),
+      },
+      {
+        key: 'nextWeek', label: t('patients.kanban.nextWeek'), subtitle: fmtRange(nextWeekStart, nextWeekEnd), iconSvg: 'zanahoria',
+        patients: search.filter(p => p.status === 'active' && p.nextAppointmentDate && inNextWeek(p.nextAppointmentDate)),
+      },
+      {
+        key: 'noAppointment', label: t('patients.kanban.noAppt'), iconSvg: 'galleta',
+        patients: search.filter(p => p.status === 'active' && (
+          !p.nextAppointmentDate ||
+          (!inThisWeek(p.nextAppointmentDate) && !inNextWeek(p.nextAppointmentDate))
+        )),
+      },
+      {
+        key: 'discharged', label: t('patients.kanban.discharged'), iconSvg: 'lechuga',
+        patients: search.filter(p => p.status === 'discharged'),
+      },
+      {
+        key: 'lost', label: t('patients.kanban.lost'), iconSvg: 'generico',
+        patients: search.filter(p => p.status === 'lost'),
+      },
+    ];
+  }, [patients, searchTerm, t, dfLocale]);
+
+  // ─── Avatar ──────────────────────────────────────────────────────────────
+  const PatientAvatar = ({ patient, size = 28 }: { patient: Patient; size?: number }) => (
+    <div
+      className="rounded-full overflow-hidden flex-shrink-0"
+      style={{ width: size, height: size, backgroundColor: '#F4F2EE', border: '1px solid #E8E5DE' }}
+    >
+      {patient.photoUrl ? (
+        <Image src={patient.photoUrl} alt={patient.name} width={size} height={size} className="object-cover w-full h-full" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <span className="font-semibold text-gray-500" style={{ fontSize: size * 0.38 }}>
+            {patient.name?.charAt(0)?.toUpperCase() || 'P'}
+          </span>
+        </div>
+      )}
+    </div>
   );
 
-  // Función para clasificar pacientes para el Kanban
-  const getKanbanColumns = () => {
-    const now = new Date();
-    const startThisWeek = startOfWeek(now, { weekStartsOn: 1 }); // Lunes
-    const endThisWeek = endOfWeek(now, { weekStartsOn: 1 }); // Domingo
-    const startNextWeek = addDays(endThisWeek, 1); // Siguiente lunes
-    const endNextWeek = endOfWeek(addWeeks(now, 1), { weekStartsOn: 1 }); // Siguiente domingo
+  const statusFilters: { key: StatusFilter; label: string }[] = [
+    { key: 'all',        label: t('patients.filters.all') },
+    { key: 'active',     label: t('patients.filters.active') },
+    { key: 'discharged', label: t('patients.filters.discharged') },
+    { key: 'lost',       label: t('patients.filters.lost') },
+  ];
 
-    return {
-      // En atención: citas de hoy o pasadas (pendientes)
-      inAttention: filteredPatients.filter(patient =>
-        patient.status === 'active' &&
-        patient.nextAppointmentDate &&
-        (isToday(parseISO(patient.nextAppointmentDate)) ||
-          isPast(parseISO(patient.nextAppointmentDate)))
-      ),
-
-      // Con citas programadas para el futuro, divididas por semana
-      scheduled: {
-        thisWeek: filteredPatients.filter(patient =>
-          patient.status === 'active' &&
-          patient.nextAppointmentDate &&
-          isFuture(parseISO(patient.nextAppointmentDate)) &&
-          isAfter(parseISO(patient.nextAppointmentDate), startThisWeek) &&
-          isBefore(parseISO(patient.nextAppointmentDate), endThisWeek)
-        ),
-        nextWeek: filteredPatients.filter(patient =>
-          patient.status === 'active' &&
-          patient.nextAppointmentDate &&
-          isAfter(parseISO(patient.nextAppointmentDate), startNextWeek) &&
-          isBefore(parseISO(patient.nextAppointmentDate), endNextWeek)
-        ),
-        later: filteredPatients.filter(patient =>
-          patient.status === 'active' &&
-          patient.nextAppointmentDate &&
-          isAfter(parseISO(patient.nextAppointmentDate), endNextWeek)
-        ),
-      },
-
-      // Sin cita
-      noAppointment: filteredPatients.filter(patient =>
-        patient.status === 'active' &&
-        !patient.nextAppointmentDate
-      ),
-
-      // Dados de alta
-      discharged: filteredPatients.filter(patient =>
-        patient.status === 'discharged'
-      ),
-
-      // Perdidos
-      lost: filteredPatients.filter(patient =>
-        patient.status === 'lost'
-      ),
-    };
-  };
-
-  const columns = getKanbanColumns();
-
-  // Componente de tarjeta de paciente simplificado
-  const PatientCard = ({ patient }: { patient: Patient }) => {
-    const isPendingAppointment = patient.nextAppointmentDate &&
-      isPast(parseISO(patient.nextAppointmentDate)) &&
-      !isToday(parseISO(patient.nextAppointmentDate));
-
-    const isTodayAppointment = patient.nextAppointmentDate &&
-      isToday(parseISO(patient.nextAppointmentDate));
-    
-    const shouldShowAppointment = patient.status === 'active';
-
-    return (
-      <Link href={`/detalle-paciente/${patient.id}`} className="block mb-1.5">
-        <div className="bg-white rounded-sm border border-gray-200 p-2.5 hover:border-emerald-200 transition-colors">
-          <div className="flex items-center">
-            <div className="w-7 h-7 rounded-full overflow-hidden mr-2 flex-shrink-0">
-              {patient.photoUrl ? (
-                <Image
-                  src={patient.photoUrl}
-                  alt={patient.name}
-                  width={28}
-                  height={28}
-                  className="object-cover w-full h-full"
-                />
-              ) : (
-                <div className="w-full h-full bg-emerald-50 flex items-center justify-center">
-                  <span className="text-[10px] font-medium text-emerald-600">
-                    {patient.name?.charAt(0)?.toUpperCase() || 'P'}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-gray-800 truncate">{patient.name}</p>
-              <p className="text-[10px] text-gray-400 truncate">{patient.email || 'Sin correo'}</p>
-            </div>
-            {isPendingAppointment && (
-              <span className="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-sm ml-1 flex-shrink-0">Pendiente</span>
-            )}
-            {isTodayAppointment && (
-              <span className="text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-sm ml-1 flex-shrink-0">Hoy</span>
-            )}
-          </div>
-
-          {shouldShowAppointment && patient.nextAppointmentDate && (
-            <p className="mt-1.5 text-[10px] text-gray-400 truncate">
-              {formatDate(patient.nextAppointmentDate)}
+  // ─── Kanban Card ─────────────────────────────────────────────────────────
+  const KanbanCard = ({ patient }: { patient: Patient }) => (
+    <Link href={`/detalle-paciente/${patient.id}`} className="block">
+      <div
+        className="bg-white rounded-md p-2.5 transition-all hover:shadow-sm"
+        style={{ border: '1px solid #E8E5DE' }}
+      >
+        <div className="flex items-center gap-2">
+          <PatientAvatar patient={patient} size={28} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{patient.name}</p>
+            <p className="text-[10px] text-gray-400 truncate mt-0.5">
+              {patient.status === 'active' && patient.nextAppointmentDate
+                ? formatDate(patient.nextAppointmentDate)
+                : (patient.email || patient.phone || t('patients.noContact'))}
             </p>
-          )}
-        </div>
-      </Link>
-    );
-  };
-
-  return (
-    <div>
-      <div className="flex flex-row justify-between items-center px-4 py-2 bg-gray-100 border-b border-gray-200">
-        <div className="flex flex-row items-center gap-6">
-          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400">Pacientes</p>
-
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Buscar..."
-              className="pl-7 pr-3 py-1 text-xs rounded-sm border border-gray-300 bg-white focus:outline-none focus:border-emerald-300 w-48"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <svg
-              className="absolute left-2 top-1.5 h-3.5 w-3.5 text-gray-300"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
           </div>
         </div>
+      </div>
+    </Link>
+  );
 
-        <button 
-          className="bg-emerald-600 text-[11px] text-white px-3 py-1 rounded-sm hover:bg-emerald-700 transition flex items-center gap-1"
+  // ─── Render ──────────────────────────────────────────────────────────────
+  return (
+    <div className="bg-cream-pattern px-6 py-5 max-w-[1600px] mx-auto flex flex-col" style={{ height: 'calc(100vh - 44px)' }}>
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center gap-3 mb-5 flex-shrink-0">
+        <h1 className="text-base font-semibold text-gray-800 mr-1">{t('patients.title')}</h1>
+        <span className="text-[11px] text-gray-400 tabular-nums">
+          {sortedPatients.length} {sortedPatients.length === 1 ? t('patients.countOne') : t('patients.countMany')}
+        </span>
+
+        <button
           onClick={() => setIsModalOpen(true)}
+          className="ml-2 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition-colors"
         >
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nuevo paciente
+          <PlusCircle className="w-3.5 h-3.5" />
+          {t('patients.newPatient')}
         </button>
+
+        <div className="relative flex-1 max-w-sm ml-2">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
+          <input
+            type="text"
+            placeholder={t('patients.searchPlaceholder')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8 pr-3 py-1.5 text-xs rounded w-full focus:outline-none focus:ring-1 focus:ring-emerald-200 transition-shadow"
+            style={{ backgroundColor: '#FFFFFF', border: '1px solid #CCC9C3', color: '#2D2B28' }}
+          />
+        </div>
+
+        {/* Filtros de estado */}
+        <div className="flex items-center gap-1">
+          {statusFilters.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={`px-2 py-1 text-[11px] rounded transition-colors ${
+                statusFilter === f.key
+                  ? 'text-gray-900 font-medium bg-white border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto flex items-center gap-3">
+          {/* Toggle vista */}
+          <div className="flex items-center rounded p-0.5" style={{ backgroundColor: '#F0EDE8', border: '1px solid #E8E5DE' }}>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              title={t('patients.view.list')}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`p-1 rounded transition-colors ${viewMode === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              title={t('patients.view.kanban')}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Loading state */}
-      {isLoading && (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-600 border-t-transparent"></div>
+      {/* ── Contenido ── */}
+      {isLoading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
         </div>
-      )}
-
-      {/* Error state */}
-      {error && (
-        <div className="text-red-600 bg-red-50 p-3 m-3 rounded-sm text-xs">
+      ) : error ? (
+        <div className="bg-red-50 text-red-700 p-4 rounded-md text-sm border border-red-200">
           <p>{error}</p>
-          <button 
-            onClick={fetchPatients}
-            className="mt-1 text-emerald-600 hover:underline text-[11px]"
-          >
-            Reintentar
+          <button onClick={fetchPatients} className="mt-2 text-emerald-600 hover:underline text-xs">
+            {t('patients.retry')}
           </button>
         </div>
-      )}
-
-      {/* Kanban Board - only show when not loading and no error */}
-      {!isLoading && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-5 overflow-x-auto">
-          {/* Columna: En Atención */}
-          <div className="bg-gray-50 border-r border-gray-200" style={{ minHeight: 'calc(100vh - 82px)', minWidth: '200px' }}>
-            <div className="px-3 py-2 border-b-2 border-emerald-500">
-              <div className="flex items-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-500">En Atención</span>
-                <span className="ml-1.5 text-[10px] text-gray-300">{columns.inAttention.length}</span>
-              </div>
-            </div>
-            <div className="p-1.5">
-              {columns.inAttention.map((patient) => (
-                <PatientCard key={patient.id} patient={patient} />
-              ))}
-              {columns.inAttention.length === 0 && (
-                <p className="text-center py-8 text-[10px] text-gray-300">No hay pacientes en atención</p>
-              )}
+      ) : viewMode === 'list' ? (
+        sortedPatients.length === 0 ? (
+          <div className="text-center py-16 rounded-md text-xs text-gray-400 border border-dashed" style={{ borderColor: '#E8E5DE', backgroundColor: '#FFFFFF' }}>
+            {t('patients.noResults')}
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="bg-white rounded-md overflow-hidden" style={{ border: '1px solid #E8E5DE' }}>
+            <table className="w-full">
+              <thead style={{ backgroundColor: '#FAF9F7', borderBottom: '1px solid #E8E5DE' }}>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-gray-500">
+                  <th className="px-4 py-2.5 font-semibold">{t('patients.table.patient')}</th>
+                  <th className="px-3 py-2.5 font-semibold">{t('patients.table.email')}</th>
+                  <th className="px-3 py-2.5 font-semibold">{t('patients.table.phone')}</th>
+                  <th className="px-3 py-2.5 font-semibold">{t('patients.table.nextAppt')}</th>
+                  <th className="px-3 py-2.5 font-semibold">{t('patients.table.status')}</th>
+                  <th className="px-3 py-2.5 w-[24px]"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedPatients.map(patient => {
+                  const apptDate = patient.nextAppointmentDate ? parseISO(patient.nextAppointmentDate) : null;
+                  const apptPast = apptDate ? apptDate.getTime() < Date.now() : false;
+                  return (
+                    <tr
+                      key={patient.id}
+                      onClick={() => router.push(`/detalle-paciente/${patient.id}`)}
+                      className="group cursor-pointer transition-colors"
+                      style={{ borderTop: '1px solid #F0EDE8' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#FAF9F7')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <PatientAvatar patient={patient} size={32} />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-800 truncate text-xs leading-tight">{patient.name}</p>
+                            {patient.birthDate && (
+                              <p className="text-[10px] text-gray-400 mt-0.5 tabular-nums">
+                                {Math.floor((Date.now() - parseISO(patient.birthDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25))} {t('patients.years')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-[11px] text-gray-500">
+                        {patient.email ? (
+                          <span className="inline-flex items-center gap-1.5 truncate">
+                            <Mail className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{patient.email}</span>
+                          </span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[11px] text-gray-500 tabular-nums">
+                        {patient.phone ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Phone className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                            {patient.phone}
+                          </span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {patient.status === 'active' && apptDate ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            {apptPast
+                              ? <AlertCircle className="w-3.5 h-3.5 text-white flex-shrink-0" fill="#F59E0B" strokeWidth={2.5} />
+                              : <CheckCircle2 className="w-3.5 h-3.5 text-white flex-shrink-0" fill="#059669" strokeWidth={2.5} />}
+                            <span className="text-[11px] text-gray-700 tabular-nums">{formatDate(patient.nextAppointmentDate)}</span>
+                          </span>
+                        ) : <span className="text-[11px] text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5">{getStatusBadge(patient)}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500 transition-colors inline-block" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
             </div>
           </div>
-
-          {/* Columna: Con Citas */}
-          <div className="bg-gray-50 border-r border-gray-200" style={{ minHeight: 'calc(100vh - 82px)', minWidth: '200px' }}>
-            <div className="px-3 py-2 border-b-2 border-emerald-600">
-              <div className="flex items-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 mr-1.5"></span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-500">Con Citas</span>
-                <span className="ml-1.5 text-[10px] text-gray-300">
-                  {columns.scheduled.thisWeek.length + columns.scheduled.nextWeek.length + columns.scheduled.later.length}
-                </span>
+        )
+      ) : (
+        <div className="flex-1 min-h-0 flex gap-3 overflow-x-auto -mx-2 px-2">
+          {kanbanColumns.map(col => (
+            <div
+              key={col.key}
+              className="flex-shrink-0 w-72 rounded-md flex flex-col h-full"
+              style={{ backgroundColor: '#F4F2EE', border: '1px solid #E8E5DE' }}
+            >
+              <div className="px-3 py-2 flex items-center justify-between border-b flex-shrink-0" style={{ borderColor: '#E8E5DE' }}>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <img src={`/icons/${col.iconSvg}.svg`} alt="" className="w-5 h-5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-700 truncate">
+                        {col.label}
+                      </span>
+                      <span className="text-[10px] text-gray-400 tabular-nums">{col.patients.length}</span>
+                    </div>
+                    {col.subtitle && (
+                      <p className="text-[10px] text-gray-400 tabular-nums mt-0.5 leading-tight">{col.subtitle}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                {col.patients.length === 0 ? (
+                  <div className="text-center py-6 text-[10px] uppercase tracking-wider text-gray-400">
+                    {t('patients.empty')}
+                  </div>
+                ) : (
+                  col.patients.map(p => <KanbanCard key={p.id} patient={p} />)
+                )}
               </div>
             </div>
-            <div className="p-1.5">
-              {columns.scheduled.thisWeek.length === 0 && 
-               columns.scheduled.nextWeek.length === 0 && 
-               columns.scheduled.later.length === 0 ? (
-                <p className="text-center py-8 text-[10px] text-gray-300">No hay pacientes con cita</p>
-              ) : (
-                <>
-                  {columns.scheduled.thisWeek.length > 0 && (
-                    <>
-                      <p className="text-[9px] font-medium uppercase tracking-[0.1em] text-gray-400 bg-gray-100 px-2 py-0.5 mb-1 rounded-sm">Esta semana</p>
-                      {columns.scheduled.thisWeek.map((patient) => (
-                        <PatientCard key={patient.id} patient={patient} />
-                      ))}
-                    </>
-                  )}
-                  {columns.scheduled.nextWeek.length > 0 && (
-                    <>
-                      <p className="text-[9px] font-medium uppercase tracking-[0.1em] text-gray-400 bg-gray-100 px-2 py-0.5 mt-2 mb-1 rounded-sm">Próxima semana</p>
-                      {columns.scheduled.nextWeek.map((patient) => (
-                        <PatientCard key={patient.id} patient={patient} />
-                      ))}
-                    </>
-                  )}
-                  {columns.scheduled.later.length > 0 && (
-                    <>
-                      <p className="text-[9px] font-medium uppercase tracking-[0.1em] text-gray-400 bg-gray-100 px-2 py-0.5 mt-2 mb-1 rounded-sm">Más adelante</p>
-                      {columns.scheduled.later.map((patient) => (
-                        <PatientCard key={patient.id} patient={patient} />
-                      ))}
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Columna: Sin Cita */}
-          <div className="bg-gray-50 border-r border-gray-200" style={{ minHeight: 'calc(100vh - 82px)', minWidth: '200px' }}>
-            <div className="px-3 py-2 border-b-2 border-gray-400">
-              <div className="flex items-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-gray-400 mr-1.5"></span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-500">Sin Cita</span>
-                <span className="ml-1.5 text-[10px] text-gray-300">{columns.noAppointment.length}</span>
-              </div>
-            </div>
-            <div className="p-1.5">
-              {columns.noAppointment.map((patient) => (
-                <PatientCard key={patient.id} patient={patient} />
-              ))}
-              {columns.noAppointment.length === 0 && (
-                <p className="text-center py-8 text-[10px] text-gray-300">No hay pacientes sin cita</p>
-              )}
-            </div>
-          </div>
-
-          {/* Columna: Dados de Alta */}
-          <div className="bg-gray-50 border-r border-gray-200" style={{ minHeight: 'calc(100vh - 82px)', minWidth: '200px' }}>
-            <div className="px-3 py-2 border-b-2 border-gray-300">
-              <div className="flex items-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-gray-300 mr-1.5"></span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-500">Alta</span>
-                <span className="ml-1.5 text-[10px] text-gray-300">{columns.discharged.length}</span>
-              </div>
-            </div>
-            <div className="p-1.5">
-              {columns.discharged.map((patient) => (
-                <PatientCard key={patient.id} patient={patient} />
-              ))}
-              {columns.discharged.length === 0 && (
-                <p className="text-center py-8 text-[10px] text-gray-300">No hay pacientes dados de alta</p>
-              )}
-            </div>
-          </div>
-
-          {/* Columna: Pacientes Perdidos */}
-          <div className="bg-gray-50" style={{ minHeight: 'calc(100vh - 82px)', minWidth: '200px' }}>
-            <div className="px-3 py-2 border-b-2 border-gray-200">
-              <div className="flex items-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-gray-200 mr-1.5"></span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-500">Perdidos</span>
-                <span className="ml-1.5 text-[10px] text-gray-300">{columns.lost.length}</span>
-              </div>
-            </div>
-            <div className="p-1.5">
-              {columns.lost.map((patient) => (
-                <PatientCard key={patient.id} patient={patient} />
-              ))}
-              {columns.lost.length === 0 && (
-                <p className="text-center py-8 text-[10px] text-gray-300">No hay pacientes perdidos</p>
-              )}
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
-      {/* Patient creation modal */}
+      {/* ── Modal nuevo paciente ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/35 flex items-center justify-center z-50">
-          <div className="bg-white rounded-sm p-5 w-full max-w-sm border border-gray-200">
-            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400 mb-3">Nuevo paciente</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !creatingPatient && setIsModalOpen(false)} />
+          <div className="relative bg-white rounded-md shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">{t('patients.modal.title')}</span>
+            </div>
 
-            {createError && (
-              <p className="mb-3 text-[11px] text-red-500">{createError}</p>
-            )}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!newPatientName.trim()) { setCreateError(t('patients.modal.nameRequired')); return; }
+                setCreatingPatient(true);
+                setCreateError(null);
+                try {
+                  const id = await patientService.createPatient(newPatientName.trim());
+                  setNewPatientName('');
+                  setIsModalOpen(false);
+                  fetchPatients();
+                  router.push(`/detalle-paciente/${id}`);
+                } catch {
+                  setCreateError(t('patients.modal.createError'));
+                } finally {
+                  setCreatingPatient(false);
+                }
+              }}
+              className="px-5 py-4 space-y-3"
+            >
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 block mb-1.5">{t('patients.modal.nameLabel')}</label>
+                <input
+                  type="text"
+                  value={newPatientName}
+                  onChange={(e) => setNewPatientName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-gray-300 text-gray-800 placeholder:text-gray-400"
+                  placeholder={t('patients.modal.namePlaceholder')}
+                  disabled={creatingPatient}
+                  autoFocus
+                />
+              </div>
 
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              if (!newPatientName.trim()) { setCreateError('El nombre es obligatorio'); return; }
-              setCreatingPatient(true);
-              setCreateError(null);
-              try {
-                const id = await patientService.createPatient(newPatientName.trim());
-                setNewPatientName('');
-                setIsModalOpen(false);
-                fetchPatients();
-                router.push(`/detalle-paciente/${id}`);
-              } catch {
-                setCreateError('Error al crear el paciente.');
-              } finally {
-                setCreatingPatient(false);
-              }
-            }}>
-              <input
-                type="text"
-                value={newPatientName}
-                onChange={(e) => setNewPatientName(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-sm focus:outline-none focus:border-emerald-400"
-                placeholder="Nombre completo"
-                disabled={creatingPatient}
-                autoFocus
-              />
-              <div className="flex justify-end gap-2 mt-4">
-                <button type="button" onClick={() => { setIsModalOpen(false); setCreateError(null); setNewPatientName(''); }} className="text-[11px] text-gray-400 hover:text-gray-600" disabled={creatingPatient}>Cancelar</button>
-                <button type="submit" className="bg-emerald-600 text-[11px] text-white px-3 py-1 rounded-sm hover:bg-emerald-700 disabled:opacity-50" disabled={creatingPatient}>
-                  {creatingPatient ? 'Creando...' : 'Crear'}
+              {createError && (
+                <p className="text-[11px] text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {createError}
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 -mx-5 px-5 -mb-4 py-2.5 border-t border-gray-200 bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => { setIsModalOpen(false); setCreateError(null); setNewPatientName(''); }}
+                  disabled={creatingPatient}
+                  className="text-xs px-3 py-1.5 rounded text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  {t('patients.modal.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingPatient}
+                  className="text-xs px-4 py-1.5 rounded font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  {creatingPatient ? t('patients.modal.creating') : t('patients.modal.create')}
                 </button>
               </div>
             </form>
@@ -408,6 +464,6 @@ const PatientsKanbanPage: React.FC = () => {
       )}
     </div>
   );
-}
+};
 
-export default PatientsKanbanPage;
+export default PatientsPage;

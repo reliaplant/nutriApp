@@ -1,42 +1,46 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import Menu from "@/app/menu/page"
-import { Providers } from "@/app/providers"
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import { cookies, headers } from 'next/headers';
+import './globals.css';
+import Menu from '@/app/menu/page';
+import { Providers } from '@/app/providers';
+import type { Lang } from '@/app/shared/i18n';
+import { SUPPORTED_LANGS, DEFAULT_LANG } from '@/app/shared/i18n';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
+const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "NutriApp",
-  description: "Gestión nutricional de pacientes",
+  title: 'refeit',
+  description: 'Gestión nutricional de pacientes · Gestão nutricional de pacientes',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en">
-      <head>
+const SUPPORTED = SUPPORTED_LANGS.map((l) => l.code);
 
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+async function resolveLang(): Promise<Lang> {
+  const c = await cookies();
+  const cookieLang = c.get('refeit_lang')?.value as Lang | undefined;
+  if (cookieLang && SUPPORTED.includes(cookieLang)) return cookieLang;
+
+  const h = await headers();
+  const path = h.get('x-invoke-path') ?? h.get('next-url') ?? '';
+  const m = path.match(/^\/(es|pt)(?:\/|$)/);
+  if (m) return m[1] as Lang;
+
+  return DEFAULT_LANG;
+}
+
+export default async function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  const lang = await resolveLang();
+  return (
+    <html lang={lang}>
+      <head />
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <Menu />
-          <div style={{ paddingTop: '3rem' }}>
-            {children}
-          </div>
+          {children}
         </Providers>
       </body>
     </html>
