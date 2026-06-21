@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { usePersistedView } from '@/app/shared/usePersistedView';
 import Image from 'next/image';
 import Link from 'next/link';
 import { format, parseISO, isToday, isPast, isWithinInterval, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
@@ -25,7 +26,7 @@ const PatientsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = usePersistedView<ViewMode>('nutri.view.pacientes', 'list');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
@@ -73,9 +74,15 @@ const PatientsPage: React.FC = () => {
   }, [patients, searchTerm, statusFilter]);
 
   const sortedPatients = useMemo(() => {
+    const statusRank = (s?: string) => {
+      if (s === 'active') return 0;
+      if (s === 'discharged') return 1;
+      if (s === 'lost') return 2;
+      return 3;
+    };
     return [...filteredPatients].sort((a, b) => {
-      if (a.status === 'active' && b.status !== 'active') return -1;
-      if (a.status !== 'active' && b.status === 'active') return 1;
+      const sr = statusRank(a.status) - statusRank(b.status);
+      if (sr !== 0) return sr;
       if (a.nextAppointmentDate && !b.nextAppointmentDate) return -1;
       if (!a.nextAppointmentDate && b.nextAppointmentDate) return 1;
       if (a.nextAppointmentDate && b.nextAppointmentDate) {
@@ -110,6 +117,7 @@ const PatientsPage: React.FC = () => {
 
     const inThisWeek = (s: string) => isWithinInterval(parseISO(s), { start: thisWeekStart, end: thisWeekEnd });
     const inNextWeek = (s: string) => isWithinInterval(parseISO(s), { start: nextWeekStart, end: nextWeekEnd });
+    const isOverdue = (s: string) => parseISO(s).getTime() < now.getTime() && !inThisWeek(s);
 
     const fmtRange = (a: Date, b: Date) => {
       const sameMonth = a.getMonth() === b.getMonth();
@@ -119,6 +127,10 @@ const PatientsPage: React.FC = () => {
     };
 
     return [
+      {
+        key: 'overdue', label: t('patients.kanban.overdue') !== 'patients.kanban.overdue' ? t('patients.kanban.overdue') : 'Con citas vencidas', iconSvg: 'chile',
+        patients: search.filter(p => p.status === 'active' && p.nextAppointmentDate && isOverdue(p.nextAppointmentDate)),
+      },
       {
         key: 'thisWeek', label: t('patients.kanban.thisWeek'), subtitle: fmtRange(thisWeekStart, thisWeekEnd), iconSvg: 'manzana',
         patients: search.filter(p => p.status === 'active' && p.nextAppointmentDate && inThisWeek(p.nextAppointmentDate)),
@@ -131,7 +143,7 @@ const PatientsPage: React.FC = () => {
         key: 'noAppointment', label: t('patients.kanban.noAppt'), iconSvg: 'galleta',
         patients: search.filter(p => p.status === 'active' && (
           !p.nextAppointmentDate ||
-          (!inThisWeek(p.nextAppointmentDate) && !inNextWeek(p.nextAppointmentDate))
+          (!isOverdue(p.nextAppointmentDate) && !inThisWeek(p.nextAppointmentDate) && !inNextWeek(p.nextAppointmentDate))
         )),
       },
       {
@@ -139,7 +151,7 @@ const PatientsPage: React.FC = () => {
         patients: search.filter(p => p.status === 'discharged'),
       },
       {
-        key: 'lost', label: t('patients.kanban.lost'), iconSvg: 'generico',
+        key: 'lost', label: t('patients.kanban.lost'), iconSvg: 'platano',
         patients: search.filter(p => p.status === 'lost'),
       },
     ];
@@ -272,6 +284,39 @@ const PatientsPage: React.FC = () => {
             {t('patients.retry')}
           </button>
         </div>
+      ) : patients.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="relative w-full max-w-md text-center py-14">
+            {/* Decorative scattered icons */}
+            <div className="relative mx-auto mb-7 h-32 w-full max-w-xs">
+              {/* eslint-disable @next/next/no-img-element */}
+              <img src="/icons/aguacate.svg" alt="" className="absolute left-2 top-3 w-9 h-9 opacity-60 -rotate-12 select-none pointer-events-none" />
+              <img src="/icons/fresa.svg"    alt="" className="absolute left-12 bottom-1 w-8 h-8 opacity-50 rotate-6 select-none pointer-events-none" />
+              <img src="/icons/zanahoria.svg" alt="" className="absolute right-10 bottom-2 w-9 h-9 opacity-55 -rotate-6 select-none pointer-events-none" />
+              <img src="/icons/brocoli.svg" alt="" className="absolute right-2 top-4 w-8 h-8 opacity-50 rotate-12 select-none pointer-events-none" />
+              {/* Centerpiece — el plato */}
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-emerald-50 flex items-center justify-center" style={{ boxShadow: '0 8px 24px -8px rgba(4, 120, 87, 0.25)' }}>
+                <img src="/icons/manzana.svg" alt="" className="w-14 h-14" />
+              </div>
+              {/* eslint-enable @next/next/no-img-element */}
+            </div>
+
+            <h2 className="text-xl font-semibold text-gray-900 tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+              {t('patients.emptyTitle')}
+            </h2>
+            <p className="mt-2 text-[13px] text-gray-500 max-w-sm mx-auto leading-relaxed">
+              {t('patients.emptySubtitle')}
+            </p>
+
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="mt-6 inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2.5 rounded-md text-[13px] font-semibold transition-colors"
+            >
+              <PlusCircle className="w-4 h-4" />
+              {t('patients.emptyCta')}
+            </button>
+          </div>
+        </div>
       ) : viewMode === 'list' ? (
         sortedPatients.length === 0 ? (
           <div className="text-center py-16 rounded-md text-xs text-gray-400 border border-dashed" style={{ borderColor: '#E8E5DE', backgroundColor: '#FFFFFF' }}>
@@ -357,21 +402,23 @@ const PatientsPage: React.FC = () => {
         )
       ) : (
         <div className="flex-1 min-h-0 flex gap-3 overflow-x-auto -mx-2 px-2">
-          {kanbanColumns.map(col => (
+          {kanbanColumns.filter(col => col.key !== 'overdue' || col.patients.length > 0).map(col => {
+            const isOverdueCol = col.key === 'overdue';
+            return (
             <div
               key={col.key}
               className="flex-shrink-0 w-72 rounded-md flex flex-col h-full"
-              style={{ backgroundColor: '#F4F2EE', border: '1px solid #E8E5DE' }}
+              style={{ backgroundColor: isOverdueCol ? '#FEF3E2' : '#F4F2EE', border: `1px solid ${isOverdueCol ? '#F5D5A8' : '#E8E5DE'}` }}
             >
-              <div className="px-3 py-2 flex items-center justify-between border-b flex-shrink-0" style={{ borderColor: '#E8E5DE' }}>
+              <div className="px-3 py-2 flex items-center justify-between border-b flex-shrink-0" style={{ borderColor: isOverdueCol ? '#F5D5A8' : '#E8E5DE' }}>
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <img src={`/icons/${col.iconSvg}.svg`} alt="" className="w-5 h-5 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-700 truncate">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider truncate ${isOverdueCol ? 'text-amber-800' : 'text-gray-700'}`}>
                         {col.label}
                       </span>
-                      <span className="text-[10px] text-gray-400 tabular-nums">{col.patients.length}</span>
+                      <span className={`text-[10px] tabular-nums ${isOverdueCol ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>{col.patients.length}</span>
                     </div>
                     {col.subtitle && (
                       <p className="text-[10px] text-gray-400 tabular-nums mt-0.5 leading-tight">{col.subtitle}</p>
@@ -389,7 +436,8 @@ const PatientsPage: React.FC = () => {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

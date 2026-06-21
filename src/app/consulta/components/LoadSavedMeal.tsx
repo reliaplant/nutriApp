@@ -4,6 +4,7 @@ import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db, authService } from '@/app/shared/firebase';
 import { MealOption } from './meals';
 import { categoryLabels, categoryIcons, MealCategory } from '@/app/comidas/constants';
+import { useTranslation } from '@/app/shared/useTranslation';
 
 interface SavedMealOption {
   id: string;
@@ -24,6 +25,7 @@ interface LoadSavedMealProps {
 }
 
 const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
+  const { t, ti, lang } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [savedOptions, setSavedOptions] = useState<SavedMealOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
     try {
       const user = authService.getCurrentUser();
       if (!user) {
-        setError('Necesitas iniciar sesión para ver tus recetas guardadas');
+        setError(t('consultation.loadSaved.mustLogin'));
         setLoading(false);
         return;
       }
@@ -54,7 +56,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
       setSavedOptions(options);
     } catch (err) {
       console.error('Error al cargar opciones guardadas:', err);
-      setError('Error al cargar recetas guardadas');
+      setError(t('consultation.loadSaved.loadError'));
     } finally {
       setLoading(false);
     }
@@ -96,11 +98,11 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
     const date = ts.toDate ? ts.toDate() : new Date(ts);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'hoy';
-    if (diffDays === 1) return 'ayer';
-    if (diffDays < 7) return `hace ${diffDays}d`;
-    if (diffDays < 30) return `hace ${Math.floor(diffDays / 7)}sem`;
-    return date.toLocaleDateString('es', { day: '2-digit', month: 'short' });
+    if (diffDays === 0) return t('consultation.loadSaved.today');
+    if (diffDays === 1) return t('consultation.loadSaved.yesterday');
+    if (diffDays < 7) return ti('consultation.loadSaved.daysAgo', [diffDays]);
+    if (diffDays < 30) return ti('consultation.loadSaved.weeksAgo', [Math.floor(diffDays / 7)]);
+    return date.toLocaleDateString(lang === 'pt' ? 'pt-BR' : 'es', { day: '2-digit', month: 'short' });
   };
 
   const sidebarCategories: ('all' | MealCategory)[] = ['all', 'desayuno', 'mediaManana', 'almuerzo', 'lunchTarde', 'cena', 'general'];
@@ -112,10 +114,10 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
         onClick={handleOpen}
         className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors text-gray-600 bg-white hover:text-emerald-700 hover:bg-emerald-50"
         style={{ border: '1px solid #E8E5DE' }}
-        title="Cargar receta guardada"
+        title={t('consultation.loadSaved.btnTitle')}
       >
         <BookOpen className="w-3 h-3" />
-        Cargar
+        {t('consultation.loadSaved.btn')}
       </button>
 
       {isOpen && (
@@ -132,8 +134,8 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                   <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">Recetario</h3>
-                  <p className="text-[10px] text-gray-500 leading-tight">{savedOptions.length} receta{savedOptions.length !== 1 ? 's' : ''} guardada{savedOptions.length !== 1 ? 's' : ''}</p>
+                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">{t('consultation.loadSaved.title')}</h3>
+                  <p className="text-[10px] text-gray-500 leading-tight">{savedOptions.length} {savedOptions.length === 1 ? t('consultation.loadSaved.countOne') : t('consultation.loadSaved.countMany')}</p>
                 </div>
               </div>
               <button
@@ -147,12 +149,12 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
             <div className="flex flex-1 min-h-0">
               {/* Sidebar de categorías */}
               <aside className="w-44 flex-shrink-0 py-3 px-2 overflow-y-auto" style={{ backgroundColor: '#FAF9F7', borderRight: '1px solid #E8E5DE' }}>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 px-2 mb-1.5">Categorías</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 px-2 mb-1.5">{t('consultation.loadSaved.categoriesLabel')}</div>
                 <nav className="space-y-0.5">
                   {sidebarCategories.map(cat => {
                     const isActive = selectedCategory === cat;
                     const count = categoryCounts[cat] || 0;
-                    const label = cat === 'all' ? 'Todas' : categoryLabels[cat as MealCategory];
+                    const label = cat === 'all' ? t('consultation.loadSaved.all') : t(`meals.categories.${cat}`);
                     return (
                       <button
                         key={cat}
@@ -187,7 +189,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Buscar por nombre o ingrediente…"
+                      placeholder={t('consultation.loadSaved.searchPh')}
                       className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-md text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 placeholder:text-gray-400"
                       autoFocus
                     />
@@ -199,7 +201,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                   {loading ? (
                     <div className="flex items-center justify-center py-12 gap-2 text-gray-500 text-[12px]">
                       <span className="inline-block w-3.5 h-3.5 border-2 border-gray-200 border-t-emerald-600 rounded-full animate-spin" />
-                      Cargando recetas…
+                      {t('consultation.loadSaved.loading')}
                     </div>
                   ) : error ? (
                     <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] p-3 rounded">
@@ -212,13 +214,13 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                       </div>
                       {savedOptions.length === 0 ? (
                         <>
-                          <p className="text-[13px] font-medium text-gray-700">Aún no tienes recetas guardadas</p>
-                          <p className="text-[11px] text-gray-500 mt-1 max-w-xs">Cuando guardes una opción de comida, aparecerá aquí para reutilizarla en otras consultas.</p>
+                          <p className="text-[13px] font-medium text-gray-700">{t('consultation.loadSaved.emptyTitle')}</p>
+                          <p className="text-[11px] text-gray-500 mt-1 max-w-xs">{t('consultation.loadSaved.emptyMsg')}</p>
                         </>
                       ) : (
                         <>
-                          <p className="text-[13px] font-medium text-gray-700">Sin resultados</p>
-                          <p className="text-[11px] text-gray-500 mt-1">Prueba con otro término o categoría.</p>
+                          <p className="text-[13px] font-medium text-gray-700">{t('consultation.loadSaved.noResults')}</p>
+                          <p className="text-[11px] text-gray-500 mt-1">{t('consultation.loadSaved.tryAnother')}</p>
                         </>
                       )}
                     </div>
@@ -243,7 +245,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                             <div className="flex items-start justify-between mb-2 gap-2">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <img src={`/icons/${categoryIcons[opt.category]}.svg`} alt="" className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">{categoryLabels[opt.category]}</span>
+                                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">{t(`meals.categories.${opt.category}`)}</span>
                               </div>
                               <span className="flex items-center gap-0.5 text-[10px] text-gray-400 flex-shrink-0">
                                 <Clock className="w-2.5 h-2.5" />
@@ -271,7 +273,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
 
                             {/* Ingredientes preview */}
                             <div className="text-[10px] text-gray-500 truncate" style={{ borderTop: '1px solid #F0EDE8', paddingTop: '6px' }}>
-                              {ingCount} ingrediente{ingCount !== 1 ? 's' : ''}
+                              {ingCount} {ingCount === 1 ? t('consultation.loadSaved.ingShortOne') : t('consultation.loadSaved.ingShortMany')}
                               {ingCount > 0 && ': '}
                               {opt.mealOption?.ingredients?.slice(0, 3).map(i => i.name).join(', ')}
                               {ingCount > 3 && '…'}
@@ -280,7 +282,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                             {/* Hover hint */}
                             <div className={`absolute inset-x-0 bottom-0 px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center gap-1 rounded-b-md transition-opacity ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
                               <Plus className="w-3 h-3" />
-                              Usar esta receta
+                              {t('consultation.loadSaved.useRecipe')}
                             </div>
                           </button>
                         );
@@ -295,14 +297,14 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
             <div className="flex items-center justify-between px-5 py-2.5 bg-gray-50" style={{ borderTop: '1px solid #E8E5DE' }}>
               <span className="text-[10px] text-gray-500">
                 {filtered.length === savedOptions.length
-                  ? `${savedOptions.length} receta${savedOptions.length !== 1 ? 's' : ''}`
-                  : `${filtered.length} de ${savedOptions.length}`}
+                  ? `${savedOptions.length} ${savedOptions.length === 1 ? t('consultation.loadSaved.countOne') : t('consultation.loadSaved.countMany')}`
+                  : `${filtered.length} ${t('consultation.loadSaved.countOf')} ${savedOptions.length}`}
               </span>
               <button
                 onClick={() => setIsOpen(false)}
                 className="px-3 py-1.5 border border-gray-300 rounded text-gray-700 bg-white hover:bg-gray-100 text-[12px] font-medium transition-colors"
               >
-                Cerrar
+                {t('consultation.loadSaved.close')}
               </button>
             </div>
           </div>

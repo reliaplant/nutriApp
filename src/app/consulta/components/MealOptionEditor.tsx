@@ -5,8 +5,10 @@ import { ChevronDown, ChevronUp, X, Upload, Image as ImageIcon } from 'lucide-re
 import { TrashCan } from '@carbon/icons-react';
 import IngredientTypeahead, { Ingredient } from './IngredientTypeahead';
 import PortionPicker from './PortionPicker';
+import PrepSelector from './PrepSelector';
 import { getDefaultGramsForIngredient } from './portionsHelper';
 import { categoryLabels, categoryIcons, MealCategory } from '@/app/comidas/constants';
+import { useTranslation } from '@/app/shared/useTranslation';
 
 export interface MealOptionValue {
   name: string;
@@ -61,6 +63,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   footerLeft,
   commonIngredients,
 }) => {
+  const { t } = useTranslation();
   const [showInstructions, setShowInstructions] = useState(!!value.instructions);
   const [catOpen, setCatOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,7 +87,11 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
 
   // Mutaciones de ingredientes
   const addIngredient = (ing: Ingredient) => {
-    const grams = getDefaultGramsForIngredient(ing);
+    // Si el typeahead ya resolvió una porción explícita (prep + porción) usamos esos gramos.
+    // Si no, caemos al default por categoría.
+    const grams = ing.quantity && ing.quantity !== 100
+      ? ing.quantity
+      : getDefaultGramsForIngredient(ing);
     update({
       ingredients: [
         ...ingredients,
@@ -96,6 +103,10 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
           carbs:    Number(ing.carbs)    || 0,
           fat:      Number(ing.fat)      || 0,
           icon: ing.icon,
+          portions: ing.portions,
+          preparations: ing.preparations,
+          baseName: ing.baseName ?? ing.name,
+          prepKey: ing.prepKey,
         },
       ],
     });
@@ -110,6 +121,25 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   const setIngredientGrams = (idx: number, g: number) => {
     const arr = [...ingredients];
     arr[idx] = { ...arr[idx], quantity: g };
+    update({ ingredients: arr });
+  };
+
+  // Cambiar el modo de preparación de un ingrediente:
+  // intercambia macros + portions y conserva los gramos actuales.
+  const setIngredientPrep = (idx: number, prepKey: string) => {
+    const arr = [...ingredients];
+    const cur = arr[idx];
+    const prep = cur.preparations?.find((p) => p.key === prepKey);
+    if (!prep) return;
+    arr[idx] = {
+      ...cur,
+      prepKey: prep.key,
+      calories: prep.calories,
+      protein: prep.protein,
+      carbs: prep.carbs,
+      fat: prep.fat,
+      portions: prep.portions,
+    };
     update({ ingredients: arr });
   };
 
@@ -142,12 +172,12 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-md shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-md shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col" style={{ border: '1px solid #E8E5DE' }}>
 
         {/* ─── Encabezado ─── */}
-        <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-gray-400 font-medium">
+        <div className="flex items-center justify-between px-5 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid #E8E5DE' }}>
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
             <img src={`/icons/${catIcon}.svg`} alt="" className="w-4 h-4" />
             {onCategoryChange ? (
               <div className="relative">
@@ -155,13 +185,13 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                   onClick={() => setCatOpen(o => !o)}
                   className="flex items-center gap-1 hover:text-gray-700 transition-colors"
                 >
-                  <span>{categoryLabels[category]}</span>
+                  <span>{t(`meals.categories.${category}`)}</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
                 {catOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setCatOpen(false)} />
-                    <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-md shadow-lg py-1 min-w-[140px]">
+                    <div className="absolute top-full left-0 mt-1 z-20 bg-white rounded-md shadow-lg py-1 min-w-[140px]" style={{ border: '1px solid #E8E5DE' }}>
                       {(Object.keys(categoryLabels) as MealCategory[]).map(c => (
                         <button
                           key={c}
@@ -169,7 +199,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                           className={`w-full text-left px-3 py-1.5 text-[11px] uppercase tracking-wider flex items-center gap-2 hover:bg-gray-50 transition-colors ${c === category ? 'text-gray-900 font-semibold bg-gray-50' : 'text-gray-600'}`}
                         >
                           <img src={`/icons/${categoryIcons[c]}.svg`} alt="" className="w-3.5 h-3.5" />
-                          {categoryLabels[c]}
+                          {t(`meals.categories.${c}`)}
                         </button>
                       ))}
                     </div>
@@ -177,13 +207,13 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                 )}
               </div>
             ) : (
-              <span>{categoryLabels[category]}{optionLabel ? ` · ${optionLabel}` : ''}</span>
+              <span>{t(`meals.categories.${category}`)}{optionLabel ? ` · ${optionLabel}` : ''}</span>
             )}
           </div>
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-gray-100 transition-colors flex-shrink-0"
-            title="Cerrar"
+            title={t('consultation.editor.close')}
           >
             <X className="h-4 w-4 text-gray-500" />
           </button>
@@ -198,21 +228,27 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                 <button
                   type="button"
                   onClick={triggerFile}
-                  className="w-full h-full rounded-sm bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 flex items-center justify-center text-gray-400 transition-colors overflow-hidden"
-                  title={previewSrc ? 'Cambiar imagen' : 'Añadir imagen'}
+                  className="w-full h-full rounded-sm flex items-center justify-center text-gray-400 transition-colors overflow-hidden hover:bg-gray-50"
+                  style={{ backgroundColor: '#F4F2EE', border: '1px solid #E8E5DE' }}
+                  title={previewSrc ? t('consultation.editor.changeImage') : t('consultation.editor.addImage')}
                 >
                   {previewSrc ? (
                     <img src={previewSrc} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <ImageIcon className="w-7 h-7" />
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-7 h-7">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="9" cy="9" r="2" />
+                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                    </svg>
                   )}
                 </button>
                 {previewSrc && onImageRemove && (
                   <button
                     type="button"
                     onClick={onImageRemove}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors"
-                    title="Quitar imagen"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors"
+                    style={{ border: '1px solid #E8E5DE' }}
+                    title={t('consultation.editor.removeImage')}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -228,23 +264,28 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
             ) : (
               <button
                 type="button"
-                className="w-28 h-28 rounded-sm flex-shrink-0 bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 flex items-center justify-center text-gray-400 transition-colors self-start"
-                title="Añadir imagen"
+                className="w-28 h-28 rounded-sm flex-shrink-0 flex items-center justify-center text-gray-400 transition-colors self-start hover:bg-gray-50"
+                style={{ backgroundColor: '#F4F2EE', border: '1px solid #E8E5DE' }}
+                title={t('consultation.editor.addImage')}
               >
-                <ImageIcon className="w-7 h-7" />
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-7 h-7">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                </svg>
               </button>
             )}
 
             <div className="flex-1 min-w-0 space-y-3">
               {/* Nombre */}
               <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 block mb-1.5">Nombre</label>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 block mb-1.5">{t('consultation.editor.name')}</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-gray-300 text-gray-800 placeholder:text-gray-400"
                   value={value.name}
                   onChange={(e) => update({ name: e.target.value })}
-                  placeholder="Nombre de la receta…"
+                  placeholder={t('consultation.editor.namePh')}
                   autoFocus
                 />
               </div>
@@ -252,24 +293,24 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
               {/* Descripción + IA */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Descripción</label>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{t('consultation.editor.description')}</label>
                   <button
                     onClick={generateFromAI}
                     className={`text-[11px] px-2 py-1 rounded inline-flex items-center gap-1.5 font-medium transition-colors ${value.content ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'text-gray-300 cursor-not-allowed'}`}
                     disabled={!value.content}
-                    title={!value.content ? 'Escribe una descripción primero' : ''}
+                    title={!value.content ? t('consultation.editor.aiDisabled') : ''}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-3.5 h-3.5">
                       <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83" />
                     </svg>
-                    Generar con IA
+                    {t('consultation.editor.aiGenerate')}
                   </button>
                 </div>
                 <textarea
-                  className="w-full px-3 py-2 text-xs rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 resize-none transition-shadow bg-gray-50 border border-gray-200 text-gray-800 placeholder:text-gray-400"
+                  className="w-full px-3 py-2 text-xs rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 resize-none transition-shadow bg-white border border-gray-300 text-gray-800 placeholder:text-gray-400"
                   value={value.content || ''}
                   onChange={(e) => update({ content: e.target.value })}
-                  placeholder="Ej: Pollo a la plancha 150g, arroz integral 80g, ensalada con tomate y aceite de oliva…"
+                  placeholder={t('consultation.editor.descriptionPh')}
                   rows={2}
                 />
               </div>
@@ -279,9 +320,9 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
           {/* Ingredientes */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Ingredientes</label>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{t('consultation.editor.ingredients')}</label>
               {ingredients.length > 0 && (
-                <span className="text-[10px] text-gray-400">{ingredients.length} {ingredients.length === 1 ? 'ingrediente' : 'ingredientes'}</span>
+                <span className="text-[10px] text-gray-400">{ingredients.length} {ingredients.length === 1 ? t('consultation.editor.ingredientOne') : t('consultation.editor.ingredientMany')}</span>
               )}
             </div>
 
@@ -295,12 +336,12 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
             </div>
 
             {ingredients.length === 0 ? (
-              <div className="px-3 py-6 text-center text-[11px] text-gray-400 bg-gray-50 rounded-sm border border-dashed border-gray-200">
-                Busca y añade ingredientes arriba, o usa <span className="font-medium text-emerald-700">Generar con IA</span> para auto-completar.
+              <div className="px-3 py-6 text-center text-[11px] text-gray-500 rounded-sm" style={{ backgroundColor: '#FAF9F7', border: '1px dashed #E8E5DE' }}>
+                {t('consultation.editor.emptyIngredients')}
               </div>
             ) : (
-              <div className="border border-gray-200 rounded-sm overflow-hidden">
-                <ul className="divide-y divide-gray-100">
+              <div className="rounded-sm overflow-hidden" style={{ border: '1px solid #E8E5DE' }}>
+                <ul className="divide-y" style={{ borderColor: '#F0EDE8' }}>
                   {ingredients.map((ing, idx) => {
                     const q = Number(ing.quantity || 0);
                     const p = (Number(ing.protein  || 0) * q) / 100;
@@ -308,13 +349,22 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                     const f = (Number(ing.fat      || 0) * q) / 100;
                     const kcal = (Number(ing.calories || 0) * q) / 100;
                     return (
-                      <li key={idx} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 transition-colors group">
+                      <li key={idx} className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#FAF9F7] transition-colors group">
                         {ing.icon ? (
                           <img src={`/icons/${ing.icon}.svg`} alt="" className="w-5 h-5 flex-shrink-0" />
                         ) : (
                           <div className="w-5 h-5 flex-shrink-0" />
                         )}
-                        <div className="flex-1 min-w-0 text-xs font-medium truncate text-gray-800">{ing.name}</div>
+                        <div className="flex-1 min-w-0 text-xs font-medium truncate text-gray-800">
+                          {ing.baseName ?? ing.name}
+                        </div>
+                        {ing.preparations && ing.preparations.length > 1 && (
+                          <PrepSelector
+                            preparations={ing.preparations}
+                            value={ing.prepKey}
+                            onChange={(k) => setIngredientPrep(idx, k)}
+                          />
+                        )}
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <PortionPicker
                             ingredient={ing}
@@ -331,7 +381,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                         <button
                           onClick={() => removeIngredient(idx)}
                           className="p-1 rounded transition-all opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-red-50"
-                          title="Quitar ingrediente"
+                          title={t('consultation.editor.removeIngredient')}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -340,9 +390,9 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                   })}
                 </ul>
                 {/* Total */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
+                <div className="flex items-center gap-2 px-3 py-2" style={{ backgroundColor: '#FAF9F7', borderTop: '1px solid #E8E5DE' }}>
                   <div className="w-5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0 text-[10px] uppercase tracking-wider font-semibold text-gray-500">Total</div>
+                  <div className="flex-1 min-w-0 text-[10px] uppercase tracking-wider font-semibold text-gray-500">{t('consultation.editor.total')}</div>
                   <div className="flex items-center gap-3 text-[11px] tabular-nums flex-shrink-0">
                     <span className="w-9 text-right font-semibold text-gray-800">{totals.p.toFixed(0)}<span className="text-[9px] font-normal text-gray-500">P</span></span>
                     <span className="w-9 text-right font-semibold text-gray-800">{totals.c.toFixed(0)}<span className="text-[9px] font-normal text-gray-500">C</span></span>
@@ -363,13 +413,13 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
               onClick={() => setShowInstructions(s => !s)}
             >
               {showInstructions ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5 rotate-180" />}
-              Instrucciones de preparación
-              {value.instructions && !showInstructions && <span className="text-[10px] text-gray-400 ml-1">(añadidas)</span>}
+              {t('consultation.editor.instructions')}
+              {value.instructions && !showInstructions && <span className="text-[10px] text-gray-400 ml-1">{t('consultation.editor.instructionsAdded')}</span>}
             </button>
             {showInstructions && (
               <textarea
-                className="mt-1.5 w-full px-3 py-2 text-xs rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 resize-none transition-shadow bg-gray-50 border border-gray-200 text-gray-800 placeholder:text-gray-400"
-                placeholder="Cómo preparar esta comida…"
+                className="mt-1.5 w-full px-3 py-2 text-xs rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 resize-none transition-shadow bg-white border border-gray-300 text-gray-800 placeholder:text-gray-400"
+                placeholder={t('consultation.editor.instructionsPh')}
                 value={value.instructions || ''}
                 onChange={(e) => update({ instructions: e.target.value })}
                 rows={3}
@@ -379,7 +429,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
         </div>
 
         {/* ─── Footer ─── */}
-        <div className="border-t border-gray-200 bg-gray-50 flex-shrink-0">
+        <div className="bg-gray-50 flex-shrink-0" style={{ borderTop: '1px solid #E8E5DE' }}>
           <div className="px-5 py-2.5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">{footerLeft}</div>
             {primaryAction && (
@@ -388,7 +438,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                 disabled={primaryAction.disabled || primaryAction.loading}
                 className="text-xs px-4 py-1.5 rounded font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {primaryAction.loading ? 'Guardando…' : primaryAction.label}
+                {primaryAction.loading ? t('consultation.saveMeal.saving') : primaryAction.label}
               </button>
             )}
           </div>

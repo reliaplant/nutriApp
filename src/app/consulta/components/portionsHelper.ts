@@ -203,12 +203,32 @@ const DEFAULT_GRAMS: Record<IngredientCategory, number> = {
   generico: 100,
 };
 
-/** Devuelve los chips de porciones rápidas para un ingrediente. */
-export function getPortionsForIngredient(ingredient: Pick<Ingredient, 'name' | 'icon'>): Portion[] {
+/** Devuelve los chips de porciones rápidas para un ingrediente.
+ *  Si el ingrediente trae porciones definidas en la BDD se usan esas;
+ *  en caso contrario se cae al fallback por categoría inferida.
+ */
+export function getPortionsForIngredient(
+  ingredient: Pick<Ingredient, 'name' | 'icon' | 'portions'>
+): Portion[] {
+  const fromDb = ingredient.portions;
+  if (Array.isArray(fromDb) && fromDb.length > 0) {
+    return fromDb.map((p) => ({ label: p.label, gramos: p.grams }));
+  }
   return FALLBACK_PORTIONS[inferCategory(ingredient)];
 }
 
 /** Devuelve los gramos por defecto al añadir el ingrediente por primera vez. */
-export function getDefaultGramsForIngredient(ingredient: Pick<Ingredient, 'name' | 'icon'>): number {
+export function getDefaultGramsForIngredient(
+  ingredient: Pick<Ingredient, 'name' | 'icon' | 'portions'>
+): number {
+  const fromDb = ingredient.portions;
+  if (Array.isArray(fromDb) && fromDb.length > 0) {
+    // Preferir una porción "razonable" (entre 20 y 250 g) que no sea exactamente 100 g.
+    // Evita tomar por defecto cosas como "1 pollo entero = 1200 g".
+    const reasonable = fromDb.find((p) => p.grams >= 20 && p.grams <= 250 && p.grams !== 100);
+    if (reasonable) return reasonable.grams;
+    // Si no hay nada razonable, usar el fallback por categoría inferida.
+    return DEFAULT_GRAMS[inferCategory(ingredient)];
+  }
   return DEFAULT_GRAMS[inferCategory(ingredient)];
 }

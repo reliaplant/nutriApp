@@ -2,38 +2,43 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Check, Minus, Sparkles, ArrowRight, Building2, Leaf, Zap } from 'lucide-react';
+import { Check, Sparkles, ArrowRight, Leaf, Zap, Building2 } from 'lucide-react';
 import { t, ti, type Lang } from '@/app/shared/i18n';
 
-type PlanKey = 'free' | 'pro' | 'enterprise';
+type PlanKey = 'free' | 'premium';
+
+interface PlanPrices {
+  monthly: number;
+  annual: number; // precio mensual facturando anual
+}
+
+interface CurrencyConfig {
+  prefix: string;   // símbolo antes del número
+  suffix?: string;  // sufijo opcional (" MXN")
+  premium: PlanPrices;
+}
+
+const CURRENCIES: Record<Lang, CurrencyConfig> = {
+  es: { prefix: '$',  suffix: ' MXN', premium: { monthly: 240, annual: 190 } },
+  pt: { prefix: 'R$ ',                  premium: { monthly: 55,  annual: 50  } },
+};
 
 interface PlanConfig {
   key: PlanKey;
   icon: React.ReactNode;
-  priceMonthly: number;
-  priceAnnual: number;
   ctaHref: string;
   highlight?: boolean;
 }
 
 const PLANS: PlanConfig[] = [
-  { key: 'free',       icon: <Leaf     className="w-3.5 h-3.5" strokeWidth={1.75} />, priceMonthly: 0,   priceAnnual: 0,  ctaHref: '/login' },
-  { key: 'pro',        icon: <Zap      className="w-3.5 h-3.5" strokeWidth={1.75} />, priceMonthly: 24,  priceAnnual: 19, ctaHref: '/login', highlight: true },
-  { key: 'enterprise', icon: <Building2 className="w-3.5 h-3.5" strokeWidth={1.75} />, priceMonthly: 109, priceAnnual: 89, ctaHref: 'mailto:hola@refeit.app' },
-];
-
-const COMP_ROWS: { key: string; freeBool?: boolean; proBool?: boolean; entBool?: boolean }[] = [
-  { key: 'patients' },
-  { key: 'ai',        freeBool: false, proBool: true,  entBool: true },
-  { key: 'recipes' },
-  { key: 'charts',    freeBool: false, proBool: true,  entBool: true },
-  { key: 'multiuser', freeBool: false, proBool: false, entBool: true },
-  { key: 'api',       freeBool: false, proBool: false, entBool: true },
-  { key: 'support' },
+  { key: 'free',    icon: <Leaf className="w-3.5 h-3.5" strokeWidth={1.75} />, ctaHref: '/login' },
+  { key: 'premium', icon: <Zap  className="w-3.5 h-3.5" strokeWidth={1.75} />, ctaHref: '/login', highlight: true },
 ];
 
 export default function Pricing({ lang = 'es' as Lang }: { lang?: Lang }) {
   const [isAnnual, setIsAnnual] = useState(true);
+  const currency = CURRENCIES[lang] ?? CURRENCIES.es;
+  const fmtPrice = (n: number) => `${currency.prefix}${n}${currency.suffix ?? ''}`;
 
   return (
     <div>
@@ -64,7 +69,7 @@ export default function Pricing({ lang = 'es' as Lang }: { lang?: Lang }) {
       <div className="grid md:grid-cols-3 gap-4 max-w-5xl mx-auto">
         {PLANS.map((p) => {
           const data = t(`pricing.plans.${p.key}`, lang) as { name: string; tagline: string; cta: string; features: string[] };
-          const price = isAnnual ? p.priceAnnual : p.priceMonthly;
+          const price = p.key === 'free' ? 0 : (isAnnual ? currency.premium.annual : currency.premium.monthly);
           const isHighlighted = p.highlight;
 
           return (
@@ -94,7 +99,7 @@ export default function Pricing({ lang = 'es' as Lang }: { lang?: Lang }) {
 
                 <div className="flex items-baseline gap-1.5 mb-1">
                   <span className="text-4xl font-semibold text-gray-900 tabular-nums" style={{ letterSpacing: '-0.03em' }}>
-                    €{price}
+                    {fmtPrice(price)}
                   </span>
                   {price > 0 && <span className="text-[12px] text-gray-500">{t('pricing.perMonth', lang)}</span>}
                 </div>
@@ -102,7 +107,7 @@ export default function Pricing({ lang = 'es' as Lang }: { lang?: Lang }) {
                   {price === 0
                     ? t('pricing.noCost', lang)
                     : isAnnual
-                      ? ti('pricing.annualBilling', lang, [price * 12])
+                      ? ti('pricing.annualBilling', lang, [fmtPrice(price * 12)])
                       : t('pricing.monthlyBilling', lang)}
                 </p>
 
@@ -130,62 +135,54 @@ export default function Pricing({ lang = 'es' as Lang }: { lang?: Lang }) {
             </div>
           );
         })}
-      </div>
 
-      {/* Comparison table */}
-      <div className="mt-20 max-w-5xl mx-auto">
-        <div className="text-center mb-8">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">{t('pricing.comparison', lang)}</p>
-          <h3 className="text-2xl font-semibold tracking-tight text-gray-900" style={{ letterSpacing: '-0.02em' }}>
-            {t('pricing.whatsIncluded', lang)}
-          </h3>
-        </div>
+        {/* Business / Clínicas — visual-only card, no real tier */}
+        {(() => {
+          const data = t('pricing.plans.business', lang) as { name: string; tagline: string; cta: string; features: string[] };
+          return (
+            <div className="relative rounded-xl bg-white flex flex-col transition-all hover:-translate-y-0.5"
+              style={{ border: '1px solid #E8E5DE', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+              <div className="p-6 pb-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-400"
+                    style={{ backgroundColor: '#F4F2EE' }}>
+                    <Building2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  </span>
+                  <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight" style={{ letterSpacing: '-0.01em' }}>
+                    {data.name}
+                  </h3>
+                </div>
+                <p className="text-[12px] text-gray-500 mb-5">{data.tagline}</p>
 
-        <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8E5DE' }}>
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr style={{ borderBottom: '1px solid #E8E5DE', backgroundColor: '#FAF9F7' }}>
-                <th className="text-left px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                  {t('pricing.function', lang)}
-                </th>
-                {PLANS.map((p) => {
-                  const name = (t(`pricing.plans.${p.key}.name`, lang) as string);
-                  return (
-                    <th key={p.key} className={`text-center px-4 py-3 text-[11px] font-semibold ${p.highlight ? 'text-emerald-700' : 'text-gray-700'}`}>
-                      {name}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {COMP_ROWS.map((row, i) => {
-                const rowData = t(`pricing.compRows.${row.key}`, lang) as { label: string; free?: string; pro?: string; enterprise?: string };
-                const cells: (string | boolean)[] = [
-                  row.freeBool !== undefined ? row.freeBool : (rowData.free ?? ''),
-                  row.proBool  !== undefined ? row.proBool  : (rowData.pro  ?? ''),
-                  row.entBool  !== undefined ? row.entBool  : (rowData.enterprise ?? ''),
-                ];
-                return (
-                  <tr key={row.key} style={{ borderBottom: i < COMP_ROWS.length - 1 ? '1px solid #F0EDE8' : undefined }}>
-                    <td className="px-5 py-3 text-gray-700">{rowData.label}</td>
-                    {cells.map((cell, j) => (
-                      <td key={j} className="text-center px-4 py-3 tabular-nums">
-                        {cell === true ? (
-                          <Check className="w-4 h-4 inline-block text-emerald-700" strokeWidth={2.5} />
-                        ) : cell === false ? (
-                          <Minus className="w-4 h-4 inline-block text-gray-300" strokeWidth={2} />
-                        ) : (
-                          <span className="text-gray-700 text-[12.5px]">{cell as string}</span>
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                <div className="flex items-baseline gap-1.5 mb-1">
+                  <span className="text-3xl font-semibold text-gray-900 tracking-tight" style={{ letterSpacing: '-0.03em' }}>
+                    {t('pricing.customPrice', lang)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500">{t('pricing.customBilling', lang)}</p>
+
+                <a href="mailto:hola@refeit.app?subject=Plan%20Empresas"
+                  className="mt-5 w-full py-2.5 px-4 rounded-md text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-colors bg-white text-gray-900 hover:bg-gray-50"
+                  style={{ border: '1px solid #E8E5DE' }}>
+                  {data.cta}
+                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={2} />
+                </a>
+              </div>
+
+              <div className="px-6 pt-5 pb-6 mt-auto" style={{ borderTop: '1px solid #F0EDE8' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-3">{t('pricing.includes', lang)}</p>
+                <ul className="space-y-2">
+                  {data.features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" strokeWidth={2.5} />
+                      <span className="text-[12.5px] text-gray-700 leading-snug">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* FAQs */}

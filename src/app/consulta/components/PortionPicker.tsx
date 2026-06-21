@@ -5,9 +5,10 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { Ingredient } from './IngredientTypeahead';
 import { getPortionsForIngredient } from './portionsHelper';
+import { useTranslation } from '@/app/shared/useTranslation';
 
 interface PortionPickerProps {
-  ingredient: Pick<Ingredient, 'name' | 'icon'>;
+  ingredient: Pick<Ingredient, 'name' | 'icon' | 'portions'>;
   /** Gramos actuales (siempre se almacena en gramos). */
   grams: number;
   /** Notifica el nuevo total en gramos. */
@@ -21,6 +22,7 @@ interface PortionPickerProps {
  * El campo numérico siempre representa gramos — fuente única de verdad.
  */
 const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, onChange }) => {
+  const { t, ti } = useTranslation();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -54,7 +56,7 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, onChan
   return (
     <>
       <input
-        className="w-12 py-0.5 px-1.5 text-xs rounded-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 bg-white border border-gray-300 text-gray-800"
+        className="w-16 py-0.5 px-1.5 text-xs rounded-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 bg-white border border-gray-300 text-gray-800"
         type="number"
         value={grams === 0 ? '' : grams}
         onChange={(e) => {
@@ -68,7 +70,7 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, onChan
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(o => !o)}
-        title="Cambiar a porción casera (cda, taza, unidad…)"
+        title={t('consultation.portion.title')}
         className="flex items-center gap-0.5 text-[10px] text-gray-500 hover:text-emerald-700 transition-colors px-0.5"
       >
         g
@@ -82,7 +84,7 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, onChan
           style={{ top: pos.top, left: pos.left, border: '1px solid #E8E5DE' }}
         >
           <div className="px-2.5 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">
-            Porciones rápidas
+            {t('consultation.portion.quickPortions')}
           </div>
           {portions.map((p, i) => (
             <button
@@ -101,7 +103,7 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, onChan
               onClick={() => { onChange(grams + (portions[0]?.gramos || 10)); setOpen(false); }}
               className="w-full text-left px-2.5 py-1.5 text-[11px] text-emerald-700 hover:bg-emerald-50 transition-colors"
             >
-              + Sumar 1 {portions[0]?.label.replace(/^1\s*/, '') || 'porción'}
+              {ti('consultation.portion.add', [portions[0]?.label.replace(/^1\s*/, '') || 'porción'])}
             </button>
           </div>
         </div>,

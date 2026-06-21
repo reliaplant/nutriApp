@@ -24,6 +24,8 @@ import {
   signOut,
   sendPasswordResetEmail,
   updateProfile,
+  GoogleAuthProvider,
+  signInWithPopup,
   User,
   UserCredential,
   browserLocalPersistence,
@@ -46,17 +48,18 @@ export { ref, uploadBytes, getDownloadURL, deleteObject, listAll };
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyApCT6WuSW0Y9lXqVn7WM3MSTcR6rsDCCI",
-  authDomain: "nutriapp-1687b.firebaseapp.com",
-  projectId: "nutriapp-1687b",
-  storageBucket: "nutriapp-1687b.firebasestorage.app",
-  messagingSenderId: "902401357823",
-  appId: "1:902401357823:web:eab3a697cb79aff17dd9ca"
+  apiKey: "AIzaSyADffMjXybSnN6hSYmVrVaXQ0NnSIooEvg",
+  authDomain: "refeit-47277.firebaseapp.com",
+  projectId: "refeit-47277",
+  storageBucket: "refeit-47277.firebasestorage.app",
+  messagingSenderId: "208398794432",
+  appId: "1:208398794432:web:28d157693a340c528c3725",
+  measurementId: "G-5Y8ZGR61J8"
 };
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getFirestore(app, "refeit");
 export const storage = getStorage(app);
 export const auth = getAuth(app);
 
@@ -82,11 +85,19 @@ export interface Consultation {
 }
 
 // Actualiza la interfaz NutritionUser para incluir todos los campos de perfil
+export interface UserPlan {
+  tier: 'free' | 'premium';
+  billing?: 'monthly' | 'annual';
+  renewsAt?: Timestamp | null;
+  startedAt?: Timestamp | null;
+}
+
 export interface NutritionUser {
   uid: string;
   email: string;
   displayName?: string;
   role: 'admin' | 'nutritionist';
+  plan?: UserPlan;
   phone?: string;
   whatsapp?: string;
   showWhatsapp?: boolean;
@@ -103,6 +114,12 @@ export interface NutritionUser {
   signatureUrl?: string;        // para firma real
   textSignature?: string;       // para firma generada
   useRealSignature?: boolean;   // toggle de firma real o generada
+  // Onboarding
+  country?: string;
+  practiceType?: ('clinic' | 'private' | 'online')[];
+  patientLoad?: '0' | '1-10' | '11-30' | '30+';
+  specialties?: string[];
+  onboardingCompletedAt?: Timestamp | null;
   createdAt: Timestamp;
 }
 
@@ -157,6 +174,7 @@ export const authService = {
       email: user.email,
       displayName,
       role: 'nutritionist', // Default role
+      plan: { tier: 'free', startedAt: serverTimestamp() },
       professionalId: '',
       language: 'es',
       signatureUrl: '',
@@ -171,6 +189,31 @@ export const authService = {
   // Login with email/password
   async login(email: string, password: string): Promise<UserCredential> {
     return await signInWithEmailAndPassword(auth, email, password);
+  },
+
+  // Login with Google
+  async loginWithGoogle(): Promise<UserCredential> {
+    const provider = new GoogleAuthProvider();
+    const credential = await signInWithPopup(auth, provider);
+    // Ensure user document exists in Firestore
+    const userRef = doc(db, "users", credential.user.uid);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) {
+      await setDoc(userRef, {
+        uid: credential.user.uid,
+        email: credential.user.email,
+        displayName: credential.user.displayName || '',
+        role: 'nutritionist',
+        plan: { tier: 'free', startedAt: serverTimestamp() },
+        professionalId: '',
+        language: 'es',
+        signatureUrl: '',
+        textSignature: '',
+        useRealSignature: false,
+        createdAt: serverTimestamp()
+      });
+    }
+    return credential;
   },
   
   // Logout current user
@@ -221,7 +264,6 @@ export const patientService = {
       name,
       nutritionistId: currentUser.uid,
       status: 'active',
-      gender: 'other',
       createdAt: serverTimestamp(),
     };
     
@@ -1196,6 +1238,59 @@ export const dailyTrackingService = {
       throw error;
     }
   }
+};
+
+// =================================================================
+// Admin service: solo accesible para usuarios con role === 'admin'
+// =================================================================
+export const adminService = {
+  // Verifica si el uid actual tiene rol admin
+  async isAdmin(uid: string): Promise<boolean> {
+    try {
+      const snap = await getDoc(doc(db, 'users', uid));
+      return snap.exists() && (snap.data() as NutritionUser).role === 'admin';
+    } catch {
+      return false;
+    }
+  },
+
+  // Lista todos los usuarios (nutricionistas + admins)
+  async getAllUsers(): Promise<NutritionUser[]> {
+    const snap = await getDocs(collection(db, 'users'));
+    return snap.docs.map((d) => ({ uid: d.id, ...(d.data() as NutritionUser) }));
+  },
+
+  // Cuenta los pacientes de un nutricionista
+  async countPatientsByNutritionist(nutritionistId: string): Promise<number> {
+    const q = query(collection(db, 'patients'), where('nutritionistId', '==', nutritionistId));
+    const snap = await getDocs(q);
+    return snap.size;
+  },
+
+  // Lista pacientes de un nutricionista (sin restricción de auth)
+  async getPatientsByNutritionist(nutritionistId: string): Promise<Patient[]> {
+    const q = query(collection(db, 'patients'), where('nutritionistId', '==', nutritionistId));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Patient, 'id'>) }));
+  },
+
+  // Cambia el plan de un usuario
+  async updateUserPlan(uid: string, plan: UserPlan): Promise<void> {
+    const ref = doc(db, 'users', uid);
+    await updateDoc(ref, {
+      plan: {
+        tier: plan.tier,
+        billing: plan.billing ?? null,
+        startedAt: plan.startedAt ?? serverTimestamp(),
+        renewsAt: plan.renewsAt ?? null,
+      },
+    });
+  },
+
+  // Cambia el rol de un usuario
+  async updateUserRole(uid: string, role: 'admin' | 'nutritionist'): Promise<void> {
+    await updateDoc(doc(db, 'users', uid), { role });
+  },
 };
 
 // // Fix the Consultation interface if needed - let's ensure it's exported

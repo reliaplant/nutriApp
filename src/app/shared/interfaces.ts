@@ -5,7 +5,7 @@ export interface Patient {
   nutritionistId: string;
   name: string;
   status: 'active' | 'discharged' | 'lost';
-  gender: 'male' | 'female' | 'other';
+  gender?: 'male' | 'female' | 'other';
   createdAt: any; // Firebase Timestamp
   updatedAt?: any;
   email?: string;

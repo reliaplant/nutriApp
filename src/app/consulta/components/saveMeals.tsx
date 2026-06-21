@@ -4,6 +4,7 @@ import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db, authService } from '@/app/shared/firebase';
 import { MealOption } from '@/app/consulta/components/meals';
 import { categoryLabels, categoryColors, categoryIcons, MealCategory } from '@/app/comidas/constants';
+import { useTranslation } from '@/app/shared/useTranslation';
 
 interface SaveMealOptionProps {
   mealName: string;
@@ -12,6 +13,7 @@ interface SaveMealOptionProps {
 }
 
 const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSaveSuccess }) => {
+  const { t, ti } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [savedName, setSavedName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +69,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
 
   const handleSave = async () => {
     if (!canSave) {
-      setError(!hasValidIngredients ? 'Necesitas al menos un ingrediente con nombre' : 'Ingresa un nombre');
+      setError(!hasValidIngredients ? t('consultation.saveMeal.needIng') : t('consultation.saveMeal.needName'));
       return;
     }
     setError('');
@@ -75,7 +77,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
     try {
       const user = authService.getCurrentUser();
       if (!user) {
-        setError('Debes iniciar sesión para guardar');
+        setError(t('consultation.saveMeal.mustLogin'));
         setIsSaving(false);
         return;
       }
@@ -95,7 +97,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
       }, 900);
     } catch (err) {
       console.error('Error al guardar opción:', err);
-      setError('Error al guardar. Intenta de nuevo.');
+      setError(t('consultation.saveMeal.error'));
     } finally {
       setIsSaving(false);
     }
@@ -109,10 +111,10 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
         onClick={() => setIsOpen(true)}
         className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors text-gray-600 bg-white hover:text-emerald-700 hover:bg-emerald-50"
         style={{ border: '1px solid #E8E5DE' }}
-        title="Guardar para reutilizar"
+        title={t('consultation.saveMeal.btnTitle')}
       >
         <Bookmark className="w-3 h-3" />
-        Guardar
+        {t('consultation.saveMeal.btn')}
       </button>
 
       {isOpen && (
@@ -129,8 +131,8 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                   <Bookmark className="w-3.5 h-3.5 text-emerald-700" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">Guardar receta</h3>
-                  <p className="text-[10px] text-gray-500 leading-tight">Disponible en todas tus consultas</p>
+                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">{t('consultation.saveMeal.title')}</h3>
+                  <p className="text-[10px] text-gray-500 leading-tight">{t('consultation.saveMeal.subtitle')}</p>
                 </div>
               </div>
               <button
@@ -146,21 +148,21 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
             <div className="px-5 pb-4 space-y-4">
               {/* Nombre */}
               <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">Nombre</label>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">{t('consultation.saveMeal.name')}</label>
                 <input
                   ref={inputRef}
                   type="text"
                   className="w-full py-2 px-3 bg-white border border-gray-300 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 placeholder:text-gray-400"
                   value={savedName}
                   onChange={(e) => setSavedName(e.target.value)}
-                  placeholder="Ej: Pollo a la plancha con quinoa"
+                  placeholder={t('consultation.saveMeal.namePh')}
                   onKeyDown={(e) => { if (e.key === 'Enter' && canSave) handleSave(); }}
                 />
               </div>
 
               {/* Categoría — pills */}
               <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">Categoría</label>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">{t('consultation.saveMeal.category')}</label>
                 <div className="flex flex-wrap gap-1.5">
                   {categories.map(([id, name]) => {
                     const isActive = category === id;
@@ -177,7 +179,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                         style={{ border: isActive ? undefined : '1px solid #E8E5DE' }}
                       >
                         <img src={`/icons/${categoryIcons[id]}.svg`} alt="" className={`w-3.5 h-3.5 ${isActive ? '' : 'opacity-80'}`} />
-                        {name}
+                        {t(`meals.categories.${id}`)}
                       </button>
                     );
                   })}
@@ -187,25 +189,25 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
               {/* Preview de la receta */}
               <div className="rounded-md p-3" style={{ backgroundColor: '#FAF9F7', border: '1px solid #F0EDE8' }}>
                 <div className="flex items-baseline justify-between mb-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Resumen nutricional</span>
-                  <span className="text-[10px] text-gray-500 tabular-nums">{option.ingredients.length} ingrediente{option.ingredients.length !== 1 ? 's' : ''}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{t('consultation.saveMeal.nutritionSummary')}</span>
+                  <span className="text-[10px] text-gray-500 tabular-nums">{option.ingredients.length} {option.ingredients.length === 1 ? t('consultation.saveMeal.ingOne') : t('consultation.saveMeal.ingMany')}</span>
                 </div>
                 <div className="flex items-end justify-between mb-3">
                   <div>
                     <div className="text-2xl font-bold text-gray-900 tabular-nums leading-none">{Math.round(totalNutrition.calories)}</div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">kcal · porción</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">{t('consultation.saveMeal.perPortion')}</div>
                   </div>
                   <div className="grid grid-cols-3 gap-3 text-right">
                     <div>
-                      <div className="text-[10px] text-gray-500 font-medium">Prot</div>
+                      <div className="text-[10px] text-gray-500 font-medium">{t('consultation.saveMeal.protShort')}</div>
                       <div className="text-xs font-semibold text-gray-800 tabular-nums">{totalNutrition.protein.toFixed(0)}g</div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-gray-500 font-medium">Carb</div>
+                      <div className="text-[10px] text-gray-500 font-medium">{t('consultation.saveMeal.carbShort')}</div>
                       <div className="text-xs font-semibold text-gray-800 tabular-nums">{totalNutrition.carbs.toFixed(0)}g</div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-gray-500 font-medium">Grasa</div>
+                      <div className="text-[10px] text-gray-500 font-medium">{t('consultation.saveMeal.fatShort')}</div>
                       <div className="text-xs font-semibold text-gray-800 tabular-nums">{totalNutrition.fat.toFixed(0)}g</div>
                     </div>
                   </div>
@@ -217,9 +219,9 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                   <div className="bg-blue-400" style={{ width: `${macroPct.f}%` }} />
                 </div>
                 <div className="flex justify-between text-[9px] text-gray-500 mt-1 tabular-nums">
-                  <span>{macroPct.p.toFixed(0)}% prot</span>
-                  <span>{macroPct.c.toFixed(0)}% carb</span>
-                  <span>{macroPct.f.toFixed(0)}% grasa</span>
+                  <span>{macroPct.p.toFixed(0)}{t('consultation.saveMeal.pctProt')}</span>
+                  <span>{macroPct.c.toFixed(0)}{t('consultation.saveMeal.pctCarb')}</span>
+                  <span>{macroPct.f.toFixed(0)}{t('consultation.saveMeal.pctFat')}</span>
                 </div>
               </div>
 
@@ -234,7 +236,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                       </span>
                     ))}
                     {option.ingredients.length > 6 && (
-                      <span className="text-[10px] text-gray-500">+{option.ingredients.length - 6} más</span>
+                      <span className="text-[10px] text-gray-500">{ti('consultation.saveMeal.moreSuffix', [option.ingredients.length - 6])}</span>
                     )}
                   </div>
                 </div>
@@ -255,7 +257,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                 onClick={() => setIsOpen(false)}
                 disabled={isSaving}
               >
-                Cancelar
+                {t('consultation.saveMeal.cancel')}
               </button>
               <button
                 type="button"
@@ -272,17 +274,17 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                 {justSaved ? (
                   <>
                     <Sparkles className="w-3.5 h-3.5" />
-                    Guardado
+                    {t('consultation.saveMeal.saved')}
                   </>
                 ) : isSaving ? (
                   <>
                     <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Guardando…
+                    {t('consultation.saveMeal.saving')}
                   </>
                 ) : (
                   <>
                     <Save className="w-3.5 h-3.5" />
-                    Guardar receta
+                    {t('consultation.saveMeal.saveBtn')}
                   </>
                 )}
               </button>

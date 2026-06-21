@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { usePersistedView } from '@/app/shared/usePersistedView';
 import {
   collection, query, orderBy, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 } from 'firebase/firestore';
@@ -15,7 +16,7 @@ import {
   Beef, Wheat, Droplet, Sparkles, AlertCircle
 } from 'lucide-react';
 import MealOptionEditor, { MealOptionValue } from '@/app/consulta/components/MealOptionEditor';
-import { COMMON_INGREDIENTS } from '@/app/consulta/components/ingredientsData';
+import { getCommonIngredients } from '@/app/consulta/components/ingredientsData';
 import { categoryIcons, MealCategory } from './constants';
 import { SavedMeal } from '@/app/shared/interfaces';
 import { useTranslation } from '@/app/shared/useTranslation';
@@ -37,7 +38,8 @@ const macroPercents = (meal: SavedMeal) => {
 };
 
 export default function SavedMealsPage() {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
+  const commonIngredientsList = useMemo(() => getCommonIngredients(lang), [lang]);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,7 +48,7 @@ export default function SavedMealsPage() {
   const [macroFilter, setMacroFilter] = useState<MacroFilter>('all');
   const [sortBy, setSortBy] = useState<string>('lastUsed');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [viewMode, setViewMode] = usePersistedView<ViewMode>('nutri.view.comidas', 'kanban');
 
   const [mealToEdit, setMealToEdit] = useState<SavedMeal | null>(null);
   const [mealToDelete, setMealToDelete] = useState<SavedMeal | null>(null);
@@ -472,7 +474,7 @@ export default function SavedMealsPage() {
           onImageSelect={(f) => setEditorDraft(d => d ? { ...d, imageFile: f, removeExistingImage: false } : d)}
           onImageRemove={() => setEditorDraft(d => d ? { ...d, imageFile: null, removeExistingImage: true } : d)}
           showImageUpload
-          commonIngredients={COMMON_INGREDIENTS}
+          commonIngredients={commonIngredientsList}
           onClose={closeEditor}
           primaryAction={{
             label: mealToEdit ? t('meals.actions.save') : t('meals.actions.create'),

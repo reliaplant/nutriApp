@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { authService } from '@/app/shared/firebase';
-import { useAuth } from '@/app/shared/AuthContext';
+import { useAuth, hasAdminAccess } from '@/app/shared/AuthContext';
 import { useTranslation } from '@/app/shared/useTranslation';
 import LanguageSwitcher from '@/app/shared/LanguageSwitcher';
 import { Users, Calendar, UtensilsCrossed, Carrot, User, LogOut } from 'lucide-react';
@@ -71,7 +71,7 @@ const MenuPage = () => {
 
   return (
     <div>
-      <nav className="bg-white/90 backdrop-blur-md fixed w-full z-20" style={{ borderBottom: '1px solid #E8E5DE' }}>
+      <nav className="bg-white/90 backdrop-blur-md fixed w-full z-20" style={{ borderBottom: '2px solid #E8E5DE', boxShadow: '0 4px 16px -6px rgba(120, 100, 80, 0.12)' }}>
         <div className="mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-11">
             {/* Logo + Nav */}
@@ -178,6 +178,18 @@ const MenuPage = () => {
                       </div>
                     </div>
                     <div className="py-1">
+                      {hasAdminAccess(firebaseUser, userData) && (
+                        <Link
+                          href="/admin"
+                          className="flex items-center px-3 py-2 text-[12px] text-purple-700 hover:bg-[#FAF9F7] transition-colors"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-2.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
+                          </svg>
+                          Admin
+                        </Link>
+                      )}
                       <Link
                         href="/perfil"
                         className="flex items-center px-3 py-2 text-[12px] text-gray-700 hover:bg-[#FAF9F7] transition-colors"

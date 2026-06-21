@@ -7,6 +7,9 @@ import { Patient } from '@/app/shared/interfaces';
 import { Consultation } from '@/app/shared/interfaces';
 import { Printer } from 'lucide-react';
 import moment from 'moment';
+import 'moment/locale/pt-br';
+import 'moment/locale/es';
+import { useTranslation } from '@/app/shared/useTranslation';
 
 interface PrintNutritionPlanProps {
   patient: Patient | null;
@@ -19,6 +22,8 @@ interface PrintNutritionPlanProps {
     fat: number;
   };
   notes: string;
+  indicaciones?: string;
+  targetCalories?: number;
   nutritionistName?: string;
   nutritionistId?: string;
   nutritionistAvatarUrl?: string;
@@ -53,6 +58,8 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
   meals,
   totalNutrition,
   notes,
+  indicaciones,
+  targetCalories,
   nutritionistName = "Nutricionista",
   nutritionistId = "",
   nutritionistAvatarUrl,
@@ -62,6 +69,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
   nutritionistPhone,
   nutritionistEmail
 }) => {
+  const { t, lang } = useTranslation();
   const [loading, setLoading] = useState(false);
 
   // Helper to load an image URL as base64 data URL
@@ -89,6 +97,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
   const generatePDF = async () => {
     setLoading(true);
     try {
+      moment.locale(lang === 'pt' ? 'pt-br' : 'es');
       // Preload images
       const [logoData, avatarData, signatureData] = await Promise.all([
         nutritionistLogoUrl ? loadImage(nutritionistLogoUrl) : Promise.resolve(null),
@@ -152,23 +161,44 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         doc.setFont("helvetica", "bold");
         doc.setFontSize(18);
         setColor(COLORS.text);
-        doc.text("Plan Nutricional", titleX, yPos);
+        doc.text(t('consultation.pdf.title'), titleX, yPos);
 
-        // Nutritionist name + specialization on the right
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        setColor(COLORS.textMuted);
+        // Right-side block: avatar + name + specialization + date
         const rightX = pageWidth - margin;
-        doc.text(nutritionistName, rightX, yPos - 4, { align: 'right' });
+        let nameX = rightX;
+
+        // Avatar circle (small) to the right of name
+        if (avatarData) {
+          try {
+            const avSize = 8;
+            const avX = rightX - avSize;
+            const avY = yPos - 7;
+            // Soft border circle behind the image
+            setDraw(COLORS.border);
+            doc.setLineWidth(0.3);
+            doc.circle(avX + avSize / 2, avY + avSize / 2, avSize / 2 + 0.3, 'S');
+            doc.addImage(avatarData, 'PNG', avX, avY, avSize, avSize);
+            nameX = avX - 2;
+          } catch { /* skip avatar */ }
+        }
+
+        // Nutritionist name
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        setColor(COLORS.text);
+        doc.text(nutritionistName, nameX, yPos - 4, { align: 'right' });
         if (nutritionistSpecialization) {
+          doc.setFont("helvetica", "normal");
           doc.setFontSize(7);
-          doc.text(nutritionistSpecialization, rightX, yPos, { align: 'right' });
+          setColor(COLORS.textMuted);
+          doc.text(nutritionistSpecialization, nameX, yPos, { align: 'right' });
         }
 
         // Date
         const dateStr = consultation?.date
           ? moment(consultation.date).format('DD MMM YYYY')
           : moment().format('DD MMM YYYY');
+        doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         setColor(COLORS.textLight);
         doc.text(dateStr, rightX, yPos + 4, { align: 'right' });
@@ -191,7 +221,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         if (nutritionistPhone) footerParts.push(nutritionistPhone);
         if (nutritionistEmail) footerParts.push(nutritionistEmail);
         doc.text(footerParts.join('  ·  '), margin, footerY);
-        doc.text(`${currentPage}`, pageWidth - margin, footerY, { align: 'right' });
+        // Page number "X de N" written in a 2nd pass once total pages are known
       };
 
       const checkNewPage = (requiredSpace: number): boolean => {
@@ -216,14 +246,14 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
         setColor(COLORS.primary);
-        doc.text("PACIENTE", margin, yPos);
+        doc.text(t('consultation.pdf.patient'), margin, yPos);
         yPos += 5;
 
         // Patient name
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
         setColor(COLORS.text);
-        doc.text(patient.name || 'Sin nombre', margin, yPos);
+        doc.text(patient.name || t('consultation.pdf.noName'), margin, yPos);
         yPos += 7;
 
         // Info chips
@@ -233,11 +263,11 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
           : null;
 
         const chips: string[] = [];
-        if (patient.gender) chips.push(patient.gender === 'male' ? '♂ Masculino' : '♀ Femenino');
-        if (age !== null) chips.push(`${age} años`);
+        if (patient.gender) chips.push(patient.gender === 'male' ? t('consultation.pdf.male') : t('consultation.pdf.female'));
+        if (age !== null) chips.push(`${age} ${t('consultation.pdf.years')}`);
         if (patient.height) chips.push(`${patient.height} cm`);
         if (patient.currentWeight) chips.push(`${patient.currentWeight} kg`);
-        if (bmi) chips.push(`IMC ${bmi}`);
+        if (bmi) chips.push(`${t('consultation.pdf.bmi')} ${bmi}`);
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
@@ -262,7 +292,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7);
       setColor(COLORS.primary);
-      doc.text("RESUMEN NUTRICIONAL", margin, yPos);
+      doc.text(t('consultation.pdf.nutritionSummary'), margin, yPos);
       yPos += 7;
 
       // Calorie card
@@ -280,15 +310,38 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       setColor(COLORS.textMuted);
-      doc.text('kcal / día', kcalLabelX, yPos + 12);
+      doc.text(t('consultation.pdf.kcalDay'), kcalLabelX, yPos + 12);
+
+      // Target kcal on the right side of the card (if available)
+      if (targetCalories && targetCalories > 0) {
+        const target = Math.round(targetCalories);
+        const diff = Math.round(totalNutrition.calories) - target;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        setColor(COLORS.textMuted);
+        doc.text(t('consultation.pdf.targetCalories').toUpperCase(), pageWidth - margin - 4, yPos + 6, { align: 'right' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        setColor(COLORS.text);
+        doc.text(`${target} ${t('consultation.pdf.kcalDay')}`, pageWidth - margin - 4, yPos + 12, { align: 'right' });
+        // Diff badge
+        const diffStr = `${diff > 0 ? '+' : ''}${diff} kcal`;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        const diffColor: [number, number, number] = Math.abs(diff) <= Math.max(50, target * 0.05)
+          ? COLORS.primaryDark
+          : (diff > 0 ? COLORS.fat : COLORS.protein);
+        setColor(diffColor);
+        doc.text(diffStr, pageWidth - margin - 4, yPos + 16, { align: 'right' });
+      }
 
       yPos += 24;
 
       // Macro bars
       const macros = [
-        { label: 'Proteínas', value: totalNutrition.protein, multiplier: 4, unit: 'g', color: COLORS.protein },
-        { label: 'Carbohidratos', value: totalNutrition.carbs, multiplier: 4, unit: 'g', color: COLORS.carbs },
-        { label: 'Grasas', value: totalNutrition.fat, multiplier: 9, unit: 'g', color: COLORS.fat },
+        { label: t('consultation.pdf.proteins'), value: totalNutrition.protein, multiplier: 4, unit: 'g', color: COLORS.protein },
+        { label: t('consultation.pdf.carbs'), value: totalNutrition.carbs, multiplier: 4, unit: 'g', color: COLORS.carbs },
+        { label: t('consultation.pdf.fats'), value: totalNutrition.fat, multiplier: 9, unit: 'g', color: COLORS.fat },
       ];
 
       const totalCalFromMacros = macros.reduce((sum, m) => sum + m.value * m.multiplier, 0);
@@ -318,11 +371,73 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       drawLine(margin, yPos, pageWidth - margin, yPos);
       yPos += 8;
 
+      // ── Distribución kcal por comida ──
+      const mealKcalTotals = meals
+        .filter(m => m.options && m.options.length > 0)
+        .map(m => {
+          const opt = m.options[0];
+          const kcal = (opt.ingredients || []).reduce(
+            (s, i) => s + (Number(i.calories || 0) * Number(i.quantity || 0) / 100),
+            0
+          );
+          return { name: m.name, kcal };
+        });
+      const distributionTotal = mealKcalTotals.reduce((s, m) => s + m.kcal, 0);
+
+      if (distributionTotal > 0 && mealKcalTotals.length > 1) {
+        checkNewPage(22);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        setColor(COLORS.primary);
+        doc.text(t('consultation.pdf.kcalDistribution'), margin, yPos);
+        yPos += 5;
+
+        // Stacked bar
+        const barH = 5;
+        const palette: [number, number, number][] = [
+          COLORS.primary, COLORS.carbs, COLORS.protein, COLORS.fat,
+          [139, 92, 246], [236, 72, 153], [20, 184, 166], [251, 146, 60],
+        ];
+        let barX = margin;
+        mealKcalTotals.forEach((m, i) => {
+          const w = (m.kcal / distributionTotal) * contentWidth;
+          setFill(palette[i % palette.length]);
+          doc.rect(barX, yPos, w, barH, 'F');
+          barX += w;
+        });
+        yPos += barH + 4;
+
+        // Legend (2 columns)
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        const colW = contentWidth / 2;
+        let lx = margin;
+        let ly = yPos;
+        mealKcalTotals.forEach((m, i) => {
+          const col = palette[i % palette.length];
+          setFill(col);
+          doc.circle(lx + 1.2, ly - 1, 1.2, 'F');
+          setColor(COLORS.textMuted);
+          const pct = Math.round((m.kcal / distributionTotal) * 100);
+          doc.text(`${m.name}  ·  ${Math.round(m.kcal)} kcal (${pct}%)`, lx + 4, ly);
+          if (i % 2 === 0) {
+            lx += colW;
+          } else {
+            lx = margin;
+            ly += 4;
+          }
+        });
+        if (mealKcalTotals.length % 2 !== 0) ly += 4;
+        yPos = ly + 4;
+        drawLine(margin, yPos, pageWidth - margin, yPos);
+        yPos += 8;
+      }
+
       // ── Meals ──
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7);
       setColor(COLORS.primary);
-      doc.text("PLAN ALIMENTICIO", margin, yPos);
+      doc.text(t('consultation.pdf.plan'), margin, yPos);
       yPos += 7;
 
       meals.forEach((meal) => {
@@ -357,7 +472,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
             doc.setFont("helvetica", "bold");
             doc.setFontSize(8);
             setColor(COLORS.primaryDark);
-            doc.text(`Opción ${optIdx + 1}${option.name ? ': ' + option.name : ''}`, margin + 2, yPos);
+            doc.text(`${t('consultation.pdf.option')} ${optIdx + 1}${option.name ? ': ' + option.name : ''}`, margin + 2, yPos);
             yPos += 5;
           }
 
@@ -392,12 +507,12 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
             doc.setFont("helvetica", "bold");
             doc.setFontSize(7);
             setColor(COLORS.textMuted);
-            doc.text("ALIMENTO", colAlimento + 2, yPos);
-            doc.text("CANT.", colCantidad, yPos);
-            doc.text("KCAL", colKcal, yPos);
-            doc.text("PROT", colProt, yPos);
-            doc.text("CARB", colCarbs, yPos);
-            doc.text("GRASA", colFat, yPos);
+            doc.text(t('consultation.pdf.colFood'), colAlimento + 2, yPos);
+            doc.text(t('consultation.pdf.colQty'), colCantidad, yPos);
+            doc.text(t('consultation.pdf.colKcal'), colKcal, yPos);
+            doc.text(t('consultation.pdf.colProt'), colProt, yPos);
+            doc.text(t('consultation.pdf.colCarb'), colCarbs, yPos);
+            doc.text(t('consultation.pdf.colFat'), colFat, yPos);
 
             yPos += 2;
             drawLine(margin, yPos, pageWidth - margin, yPos, COLORS.bgMedium);
@@ -439,7 +554,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
             doc.setFont("helvetica", "bold");
             doc.setFontSize(8);
             setColor(COLORS.text);
-            doc.text("Total", colAlimento + 2, yPos);
+            doc.text(t('consultation.pdf.total'), colAlimento + 2, yPos);
             doc.text(`${totalKcal}`, colKcal, yPos);
             doc.text(`${Math.round(totalProt)}`, colProt, yPos);
             doc.text(`${Math.round(totalCarb)}`, colCarbs, yPos);
@@ -485,7 +600,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
         setColor(COLORS.primary);
-        doc.text("NOTAS", margin, yPos);
+        doc.text(t('consultation.pdf.notes'), margin, yPos);
         yPos += 5;
 
         setFill(COLORS.bgLight);
@@ -504,6 +619,35 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         });
 
         yPos += notesBoxH + 5;
+      }
+
+      // ── Indicaciones del nutricionista ──
+      if (indicaciones && indicaciones.trim() !== '') {
+        const indLines = doc.splitTextToSize(indicaciones, contentWidth - 8);
+        checkNewPage(indLines.length * 4.5 + 18);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        setColor(COLORS.primary);
+        doc.text(t('consultation.pdf.indicationsTitle'), margin, yPos);
+        yPos += 5;
+
+        setFill(COLORS.primaryBg);
+        setDraw(COLORS.primaryLight);
+        doc.setLineWidth(0.3);
+        const indBoxH = indLines.length * 4.5 + 6;
+        drawRoundedRect(margin, yPos, contentWidth, indBoxH, 2, 'FD');
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        setColor(COLORS.text);
+        let indY = yPos + 5;
+        indLines.forEach((line: string) => {
+          doc.text(line, margin + 4, indY);
+          indY += 4.5;
+        });
+
+        yPos += indBoxH + 5;
       }
 
       // ── Firma del nutricionista ──
@@ -549,15 +693,30 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         setColor(COLORS.textLight);
-        doc.text(`Cédula: ${nutritionistId}`, sigCenterX, yPos, { align: 'center' });
+        doc.text(`${t('consultation.pdf.license')}: ${nutritionistId}`, sigCenterX, yPos, { align: 'center' });
       }
 
       // Final footer
       addFooter();
 
+      // Pagination "X de N" — second pass after all content
+      const totalPages = (doc as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        setColor(COLORS.textLight);
+        doc.text(
+          `${t('consultation.pdf.pageOf')} ${p} / ${totalPages}`,
+          pageWidth - margin,
+          pageHeight - 12,
+          { align: 'right' }
+        );
+      }
+
       // Save
       const safeName = (patient?.name || 'Paciente').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '').trim();
-      doc.save(`Plan_${safeName}_${moment().format('DD-MM-YYYY')}.pdf`);
+      doc.save(`${t('consultation.pdf.fileNamePrefix')}_${safeName}_${moment().format('DD-MM-YYYY')}.pdf`);
 
     } catch (error) {
       console.error("Error generando el PDF:", error);
@@ -573,7 +732,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       disabled={loading}
     >
       <Printer size={13} />
-      {loading ? "Generando..." : "Imprimir Plan"}
+      {loading ? t('consultation.pdf.btnGenerating') : t('consultation.pdf.btnPrint')}
     </button>
   );
 };

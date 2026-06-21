@@ -11,14 +11,35 @@ interface AuthState {
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthState>({
+interface AuthContextValue extends AuthState {
+  refreshUserData: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue>({
   firebaseUser: null,
   userData: null,
   loading: true,
+  refreshUserData: async () => {},
 });
 
 export function useAuth() {
   return useContext(AuthContext);
+}
+
+// Super-admins por correo (override hardcodeado, sin importar el role en Firestore).
+export const SUPER_ADMIN_EMAILS: string[] = ['aegonzalezgiraldo@gmail.com'];
+
+export function isSuperAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+export function hasAdminAccess(
+  firebaseUser: { email: string | null } | null,
+  userData: NutritionUser | null
+): boolean {
+  if (isSuperAdminEmail(firebaseUser?.email)) return true;
+  return userData?.role === 'admin';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -47,8 +68,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  const refreshUserData = async () => {
+    if (!state.firebaseUser) return;
+    try {
+      const userData = await authService.getUserData(state.firebaseUser.uid);
+      setState((prev) => ({ ...prev, userData }));
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={state}>
+    <AuthContext.Provider value={{ ...state, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );

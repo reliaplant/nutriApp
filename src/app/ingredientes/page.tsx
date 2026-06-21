@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { usePersistedView } from '@/app/shared/usePersistedView';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import {
@@ -82,7 +83,7 @@ export default function IngredientsPage() {
   const [macroFilter, setMacroFilter] = useState<MacroFilter>('all');
   const [sortBy, setSortBy] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [viewMode, setViewMode] = usePersistedView<ViewMode>('nutri.view.ingredientes', 'kanban');
 
   // Modales
   const [editorOpen, setEditorOpen] = useState(false);
@@ -382,8 +383,9 @@ export default function IngredientsPage() {
                 <input
                   type="number"
                   className="w-full px-3 py-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-gray-300 text-gray-800 tabular-nums"
-                  value={draft.calories}
-                  onChange={(e) => setDraft({ ...draft, calories: +e.target.value })}
+                  value={draft.calories === 0 ? '' : draft.calories}
+                  placeholder="0"
+                  onChange={(e) => setDraft({ ...draft, calories: e.target.value === '' ? 0 : +e.target.value })}
                 />
               </div>
 
@@ -393,8 +395,9 @@ export default function IngredientsPage() {
                   <input
                     type="number"
                     className="w-full px-2 py-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-gray-300 text-gray-800 tabular-nums"
-                    value={draft.protein}
-                    onChange={(e) => setDraft({ ...draft, protein: +e.target.value })}
+                    value={draft.protein === 0 ? '' : draft.protein}
+                    placeholder="0"
+                    onChange={(e) => setDraft({ ...draft, protein: e.target.value === '' ? 0 : +e.target.value })}
                   />
                 </div>
                 <div>
@@ -402,8 +405,9 @@ export default function IngredientsPage() {
                   <input
                     type="number"
                     className="w-full px-2 py-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-gray-300 text-gray-800 tabular-nums"
-                    value={draft.carbs}
-                    onChange={(e) => setDraft({ ...draft, carbs: +e.target.value })}
+                    value={draft.carbs === 0 ? '' : draft.carbs}
+                    placeholder="0"
+                    onChange={(e) => setDraft({ ...draft, carbs: e.target.value === '' ? 0 : +e.target.value })}
                   />
                 </div>
                 <div>
@@ -411,8 +415,9 @@ export default function IngredientsPage() {
                   <input
                     type="number"
                     className="w-full px-2 py-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-gray-300 text-gray-800 tabular-nums"
-                    value={draft.fat}
-                    onChange={(e) => setDraft({ ...draft, fat: +e.target.value })}
+                    value={draft.fat === 0 ? '' : draft.fat}
+                    placeholder="0"
+                    onChange={(e) => setDraft({ ...draft, fat: e.target.value === '' ? 0 : +e.target.value })}
                   />
                 </div>
               </div>

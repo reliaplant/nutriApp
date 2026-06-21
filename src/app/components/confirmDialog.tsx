@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from '@/app/shared/useTranslation';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -26,11 +27,14 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   title,
   message,
-  confirmText = 'Confirmar',
-  cancelText = 'Cancelar',
+  confirmText,
+  cancelText,
   variant = 'default',
 }) => {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const confirmLabel = confirmText ?? t('common.confirm');
+  const cancelLabel = cancelText ?? t('common.cancel');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -63,13 +67,13 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             onClick={onClose}
             className="px-3 py-1.5 text-[11px] text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-sm transition-colors"
           >
-            {cancelText}
+            {cancelLabel}
           </button>
           <button
             onClick={() => { onConfirm(); onClose(); }}
             className={`px-3 py-1.5 text-[11px] rounded-sm transition-colors ${variantStyles[variant]}`}
           >
-            {confirmText}
+            {confirmLabel}
           </button>
         </div>
       </div>
