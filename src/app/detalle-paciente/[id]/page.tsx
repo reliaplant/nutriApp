@@ -71,6 +71,7 @@ interface Patient {
   currentWeight: number;
   gender: 'male' | 'female' | 'other';
   country: string;
+  language?: 'es' | 'pt' | 'en';
   status: 'active' | 'discharged' | 'lost';
   nutritionistId: string;
   photoUrl?: string;
@@ -164,7 +165,7 @@ const PatientDetailPage = () => {
 
   // ── DatosPaciente state ──
   const [isEditingPatient, setIsEditingPatient] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', birthDate: '', height: 0, gender: 'other' as string, country: '', currentWeight: 0, targetWeight: 0 });
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', birthDate: '', height: 0, gender: 'other' as string, country: '', language: 'es' as 'es' | 'pt' | 'en', currentWeight: 0, targetWeight: 0 });
   const [isDeletePatientModalOpen, setIsDeletePatientModalOpen] = useState(false);
   const [isDeletingPatient, setIsDeletingPatient] = useState(false);
 
@@ -221,7 +222,7 @@ const PatientDetailPage = () => {
         const fetched = await patientService.getPatientById(patientId);
         if (fetched) {
           setPatient(fetched as Patient);
-          setEditForm({ name: fetched.name || '', email: fetched.email || '', phone: fetched.phone || '', birthDate: fetched.birthDate || '', height: fetched.height || 0, gender: fetched.gender || 'other', country: fetched.country || '', currentWeight: fetched.currentWeight || 0, targetWeight: fetched.targetWeight || 0 });
+          setEditForm({ name: fetched.name || '', email: fetched.email || '', phone: fetched.phone || '', birthDate: fetched.birthDate || '', height: fetched.height || 0, gender: fetched.gender || 'other', country: fetched.country || '', language: fetched.language || 'es', currentWeight: fetched.currentWeight || 0, targetWeight: fetched.targetWeight || 0 });
           if (fetched.targetWeight) setWeightGoal(fetched.targetWeight);
         } else {
           setError(t('patientDetail.errors.notFound'));
@@ -236,7 +237,7 @@ const PatientDetailPage = () => {
   useEffect(() => { if (patientId && patientId !== 'new') fetchDocuments(); }, [patientId]);
 
   useEffect(() => {
-    setEditForm({ name: patient.name || '', email: patient.email || '', phone: patient.phone || '', birthDate: patient.birthDate || '', height: patient.height || 0, gender: patient.gender || 'other', country: patient.country || '', currentWeight: patient.currentWeight || 0, targetWeight: patient.targetWeight || 0 });
+    setEditForm({ name: patient.name || '', email: patient.email || '', phone: patient.phone || '', birthDate: patient.birthDate || '', height: patient.height || 0, gender: patient.gender || 'other', country: patient.country || '', language: patient.language || 'es', currentWeight: patient.currentWeight || 0, targetWeight: patient.targetWeight || 0 });
   }, [patient]);
 
   useEffect(() => {
@@ -389,7 +390,7 @@ const PatientDetailPage = () => {
     if (editForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
       return; // invalid email — block save (UI shows the error inline)
     }
-    handlePatientUpdate({ ...patient, name: editForm.name, email: editForm.email, phone: editForm.phone, birthDate: editForm.birthDate, height: editForm.height, gender: editForm.gender as 'male' | 'female' | 'other', country: editForm.country, currentWeight: editForm.currentWeight, targetWeight: editForm.targetWeight });
+    handlePatientUpdate({ ...patient, name: editForm.name, email: editForm.email, phone: editForm.phone, birthDate: editForm.birthDate, height: editForm.height, gender: editForm.gender as 'male' | 'female' | 'other', country: editForm.country, language: editForm.language, currentWeight: editForm.currentWeight, targetWeight: editForm.targetWeight });
     if (editForm.targetWeight !== weightGoal) setWeightGoal(editForm.targetWeight);
     setIsEditingPatient(false);
   };
@@ -788,6 +789,15 @@ const PatientDetailPage = () => {
                   <option value="other">{t('patientDetail.fields.other')}</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">{t('patientDetail.fields.language')}</label>
+                <select name="language" value={editForm.language} onChange={(e) => setEditForm(prev => ({ ...prev, language: e.target.value as 'es' | 'pt' | 'en' }))} className="w-full px-2 py-1.5 bg-white border border-gray-300 rounded-sm text-xs focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400">
+                  <option value="es">🇪🇸 Español</option>
+                  <option value="pt">🇧🇷 Português</option>
+                  <option value="en">🇺🇸 English</option>
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">{t('patientDetail.fields.languageHint')}</p>
+              </div>
               <div className="flex space-x-2 pt-2">
                 <button type="button" onClick={() => setIsEditingPatient(false)} className="flex-1 py-1.5 border border-gray-300 rounded-sm text-xs text-gray-700 hover:bg-gray-50">{t('patientDetail.cancel')}</button>
                 <button type="button" onClick={handleSavePatientChanges} className="flex-1 bg-emerald-600 text-white py-1.5 rounded-sm text-xs font-medium hover:bg-emerald-700">{t('patientDetail.save')}</button>
@@ -801,6 +811,7 @@ const PatientDetailPage = () => {
                 { label: t('patientDetail.fields.countryShort'), value: (() => { const c = COUNTRIES.find(x => x.code === patient.country); return c ? `${c.flag} ${c.name}` : patient.country; })() },
                 { label: t('patientDetail.fields.birth'), value: patient.birthDate ? `${formatDate(patient.birthDate)} ${calculateAge(patient.birthDate) !== null ? `(${calculateAge(patient.birthDate)} ${t('patientDetail.fields.years')})` : ''}` : t('patientDetail.fields.notRegistered') },
                 { label: t('patientDetail.fields.gender'), value: patient.gender === 'male' ? t('patientDetail.fields.male') : patient.gender === 'female' ? t('patientDetail.fields.female') : patient.gender === 'other' ? t('patientDetail.fields.other') : '' },
+                { label: t('patientDetail.fields.language'), value: ({ es: '🇪🇸 Español', pt: '🇧🇷 Português', en: '🇺🇸 English' } as Record<string, string>)[patient.language || 'es'] },
                 { label: t('patientDetail.fields.heightShort'), value: patient.height ? `${patient.height} cm` : '—' },
                 { label: t('patientDetail.fields.currentWeightShort') !== 'patientDetail.fields.currentWeightShort' ? t('patientDetail.fields.currentWeightShort') : 'Peso actual', value: (currentWeight ?? patient.currentWeight) ? `${(currentWeight ?? patient.currentWeight)} kg` : '—' },
                 { label: t('patientDetail.fields.targetWeightShort') !== 'patientDetail.fields.targetWeightShort' ? t('patientDetail.fields.targetWeightShort') : 'Peso objetivo', value: patient.targetWeight ? `${patient.targetWeight} kg` : '—' },

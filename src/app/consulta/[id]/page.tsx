@@ -83,7 +83,6 @@ const MACRO_PRESETS = [
 
 export default function CrearPlan() {
   const { t, lang } = useTranslation();
-  const commonIngredientsList = useMemo(() => getCommonIngredients(lang), [lang]);
   // Helpers de etiquetas i18n
   const activityLabel = (k: string) => t(`consultation.activityLevels.${ACTIVITY_KEY_MAP[k] || k}`);
   const goalLabel = (v: string) => {
@@ -117,6 +116,8 @@ export default function CrearPlan() {
     focused: MeasureKey | null;
   }>({ waist: 0, hip: 0, neck: 0, tricipital: 0, subescapular: 0, suprailiaco: 0, arm: 0, calf: 0, wrist: 0, focused: null });
   const [patient, setPatient] = useState<Patient | null>(null);
+  // Idioma de los nombres de alimentos = idioma del paciente (cae al de la app si no tiene).
+  const commonIngredientsList = useMemo(() => getCommonIngredients(patient?.language || lang), [patient?.language, lang]);
   const [consultation, setConsultation] = useState<Consultation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

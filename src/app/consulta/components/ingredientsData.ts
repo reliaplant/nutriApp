@@ -43,14 +43,20 @@ type Alimento = {
 
 type Bdd = { alimentos: Alimento[] };
 
+// Idioma de los nombres de alimentos (independiente del idioma de la app).
+export type FoodLang = "es" | "pt" | "en";
+
 // Etiqueta legible del estado (crudo/cocido). NA no muestra etiqueta.
-const ESTADO_LABEL: Record<"es" | "pt", Record<string, string>> = {
+const ESTADO_LABEL: Record<FoodLang, Record<string, string>> = {
   es: { crudo: "cruda", cocido: "cocida" },
   pt: { crudo: "crua", cocido: "cozida" },
+  en: { crudo: "raw", cocido: "cooked" },
 };
 
-const pickNombre = (a: Alimento, lang: "es" | "pt"): string =>
-  (lang === "pt" ? a.nombre_pt : a.nombre_es) || a.nombre_es || a.nombre || a.nombre_en || "";
+const pickNombre = (a: Alimento, lang: FoodLang): string => {
+  const byLang = lang === "pt" ? a.nombre_pt : lang === "en" ? a.nombre_en : a.nombre_es;
+  return byLang || a.nombre_es || a.nombre || a.nombre_en || "";
+};
 
 const macros = (v: Valores | undefined) => ({
   calories: v?.kcal ?? 0,
@@ -69,7 +75,7 @@ const mapMedidas = (raw: Medida[] | null | undefined): IngredientPortion[] => {
 // Orden de estados para elegir el representativo (default).
 const ORDEN_ESTADOS = ["crudo", "cocido", "NA"];
 
-const expandAlimento = (a: Alimento, lang: "es" | "pt"): Ingredient | null => {
+const expandAlimento = (a: Alimento, lang: FoodLang): Ingredient | null => {
   const name = pickNombre(a, lang);
   if (!name) return null;
   const nut = a.nutrientes_100g || {};
@@ -122,11 +128,12 @@ const expandAlimento = (a: Alimento, lang: "es" | "pt"): Ingredient | null => {
 
 const DB = (bdd as unknown as Bdd).alimentos;
 
-export function getCommonIngredients(lang: "es" | "pt" = "es"): Ingredient[] {
+export function getCommonIngredients(lang: FoodLang = "es"): Ingredient[] {
+  const locale = lang === "pt" ? "pt-BR" : lang === "en" ? "en" : "es";
   return DB
     .map((a) => expandAlimento(a, lang))
     .filter((x): x is Ingredient => x !== null)
-    .sort((a, b) => a.name.localeCompare(b.name, lang === "pt" ? "pt-BR" : "es"));
+    .sort((a, b) => a.name.localeCompare(b.name, locale));
 }
 
 // Backwards compatibility — default ES list.

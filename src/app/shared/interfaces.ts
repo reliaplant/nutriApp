@@ -12,6 +12,7 @@ export interface Patient {
   phone?: string;
   birthDate?: string;
   country?: string;
+  language?: 'es' | 'pt' | 'en';   // idioma del plan/alimentos para este paciente
   height?: number;
   currentWeight?: number;
   initialWeight?: number;
