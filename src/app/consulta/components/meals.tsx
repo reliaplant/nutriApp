@@ -10,10 +10,10 @@ import {
 import IngredientTypeahead, { Ingredient } from '@/app/consulta/components/IngredientTypeahead';
 import { getDefaultGramsForIngredient } from '@/app/consulta/components/portionsHelper';
 import MealOptionEditor from '@/app/consulta/components/MealOptionEditor';
-import { ChevronDown, ChevronUp, X, Plus, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronUp, X, Plus, Pencil, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import SaveMealOption from '@/app/consulta/components/saveMeals';
 import LoadSavedMeal from './LoadSavedMeal';
-import { categoryLabels, categoryColors, categoryIcons, MealCategory } from '@/app/comidas/constants';
+import { categoryLabels, categoryColors, categoryIcons, MealCategory, normalizeCategory } from '@/app/comidas/constants';
 import ConfirmDialog from '@/app/components/confirmDialog';
 import { useTranslation } from '@/app/shared/useTranslation';
 
@@ -36,6 +36,22 @@ export interface Meal {
 }
 
 type IngredientNumericField = 'quantity' | 'calories' | 'protein' | 'carbs' | 'fat';
+
+// Hora "HH:MM" → minutos; sin hora va al final.
+export const mealTimeToMinutes = (t?: string): number => {
+  if (!t) return Number.POSITIVE_INFINITY;
+  const [h, m] = t.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+// Devuelve los índices de las comidas ordenados por hora (más temprana primero),
+// de forma estable. Útil para mostrar ordenado sin reordenar el array en estado.
+export const orderedMealIndices = (meals: Meal[]): number[] =>
+  meals.map((_, i) => i).sort((a, b) => mealTimeToMinutes(meals[a].time) - mealTimeToMinutes(meals[b].time));
+
+// Copia ordenada por hora (para PDF u otras vistas de solo lectura).
+export const sortMealsByTime = <T extends { time?: string }>(meals: T[]): T[] =>
+  meals.map((m, i) => ({ m, i })).sort((a, b) => mealTimeToMinutes(a.m.time) - mealTimeToMinutes(b.m.time)).map(x => x.m);
 
 // Componente para un item de comida individual
 interface MealItemProps {
@@ -85,24 +101,38 @@ const MealItem: React.FC<MealItemProps> = ({
   // Estados del componente
   const [showInstructionsMap, setShowInstructionsMap] = useState<Record<number, boolean>>({});
   const [deleteOptionIndex, setDeleteOptionIndex] = useState<number | null>(null);
-  const [expandedOptions, setExpandedOptions] = useState<number | null>(null);
+  // Por defecto TODAS las opciones van desplegadas. Guardamos qué índices están COLAPSADOS.
+  const [collapsedOptions, setCollapsedOptions] = useState<Set<number>>(new Set());
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
   const [editingTime, setEditingTime] = useState(false);
   const [tempTime, setTempTime] = useState(meal.time || '');
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState(meal.name || '');
+  const [descExpanded, setDescExpanded] = useState<Set<number>>(new Set());
 
   const toggleOptionExpanded = (optionIndex: number) => {
-    setExpandedOptions(prev => prev === optionIndex ? null : optionIndex);
+    setCollapsedOptions(prev => {
+      const next = new Set(prev);
+      if (next.has(optionIndex)) next.delete(optionIndex); else next.add(optionIndex);
+      return next;
+    });
+  };
+  const ensureExpanded = (optionIndex: number) => {
+    setCollapsedOptions(prev => { const n = new Set(prev); n.delete(optionIndex); return n; });
+  };
+  const allCollapsed = meal.options.length > 0 && meal.options.every((_, i) => collapsedOptions.has(i));
+  const toggleAll = () => {
+    if (allCollapsed) setCollapsedOptions(new Set());
+    else setCollapsedOptions(new Set(meal.options.map((_, i) => i)));
   };
 
   const getDefaultCategory = (): MealCategory => {
-    if (meal.category) return meal.category;
+    if (meal.category) return normalizeCategory(meal.category);
     const hour = parseInt(meal.time?.split(':')[0] || '0');
     if (hour >= 6 && hour < 10) return 'desayuno';
-    if (hour >= 10 && hour < 12) return 'mediaManana';
     if (hour >= 12 && hour < 15) return 'almuerzo';
-    if (hour >= 15 && hour < 18) return 'lunchTarde';
     if (hour >= 18 && hour < 23) return 'cena';
-    return 'general';
+    return 'snack';
   };
 
   const commitTime = () => {
@@ -129,29 +159,65 @@ const MealItem: React.FC<MealItemProps> = ({
               style={{ backgroundColor: meal.isActive !== false ? catColor.dark : '#D1D5DB' }}
             ></div>
           </div>
-          <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
-            <img src={`/icons/${catIcon}.svg`} alt="" className="w-6 h-6" />
-          </div>
-          <span className="text-[11px] font-semibold flex-shrink-0 text-gray-800">
-            {t(`meals.categories.${category}`)}
-          </span>
-          <span className="text-xs text-gray-400">·</span>
-          {editingTime ? (
+          {editingName ? (
             <input
-              type="time"
-              className="text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-200 w-20 text-gray-700 bg-white"
-              value={tempTime}
+              type="text"
               autoFocus
-              onChange={(e) => setTempTime(e.target.value)}
-              onBlur={() => commitTime()}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitTime(); }}
+              className="text-[11px] font-semibold border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-200 text-gray-800 bg-white min-w-0 w-40"
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={() => { handleMealChange(mealIndex, 'name', tempName.trim() || categoryLabels[category]); setEditingName(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { handleMealChange(mealIndex, 'name', tempName.trim() || categoryLabels[category]); setEditingName(false); } }}
             />
           ) : (
             <span
-              className="text-[11px] cursor-pointer hover:opacity-70 transition-opacity text-gray-500"
-              onDoubleClick={() => { setTempTime(meal.time || ''); setEditingTime(true); }}
+              className="group/name text-[11px] font-semibold flex-shrink-0 text-gray-800 cursor-pointer inline-flex items-center gap-1 px-1 -mx-1 rounded hover:bg-[#F0EDE8] transition-colors"
+              onClick={(e) => { e.stopPropagation(); setTempName(meal.name || categoryLabels[category]); setEditingName(true); }}
+              title={t('consultation.meals.renameHint')}
             >
-              {meal.time ? meal.time.split(':')[0] + t('consultation.meals.hourSuffix') : t('consultation.meals.noTime')}
+              {meal.name?.trim() ? meal.name : categoryLabels[category]}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5 opacity-0 group-hover/name:opacity-100 transition-opacity">
+                <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </span>
+          )}
+          <span className="text-xs text-gray-400">·</span>
+          {editingTime ? (
+            <select
+              autoFocus
+              className="text-[11px] border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-200 text-gray-700 bg-white"
+              value={(() => {
+                // Rango permitido 05:00–23:00. Ajusta a la marca de 30 min y limita al rango.
+                const cur = tempTime || meal.time || '07:00';
+                const [h, m] = cur.split(':').map(Number);
+                let mins = (h || 0) * 60 + (m || 0);
+                mins = Math.round(mins / 30) * 30;          // a la media hora más cercana
+                mins = Math.min(Math.max(mins, 300), 1380); // 05:00–23:00
+                const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+                const mm = String(mins % 60).padStart(2, '0');
+                return `${hh}:${mm}`;
+              })()}
+              onChange={(e) => { const v = e.target.value; setTempTime(v); handleMealChange(mealIndex, 'time', v); setEditingTime(false); }}
+              onBlur={() => setEditingTime(false)}
+            >
+              {Array.from({ length: 37 }, (_, i) => {
+                const mins = 300 + i * 30; // 05:00 (300) … 23:00 (1380)
+                const v = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+                return <option key={v} value={v}>{v}</option>;
+              })}
+            </select>
+          ) : (
+            <span
+              className="group/time inline-flex items-center gap-1 text-[11px] cursor-pointer px-1.5 py-0.5 rounded text-gray-500 hover:text-gray-800 hover:bg-[#F0EDE8] transition-colors"
+              style={{ textDecoration: 'underline dotted', textDecorationColor: '#CFCAC0', textUnderlineOffset: '3px' }}
+              onClick={(e) => { e.stopPropagation(); setTempTime(meal.time || ''); setEditingTime(true); }}
+              title={t('consultation.meals.editTimeHint') || 'Clic para cambiar la hora'}
+            >
+              {meal.time ? `${meal.time} ${t('consultation.meals.hourSuffix')}` : t('consultation.meals.noTime')}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5 opacity-0 group-hover/time:opacity-100 transition-opacity">
+                <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
             </span>
           )}
         </div>
@@ -176,8 +242,19 @@ const MealItem: React.FC<MealItemProps> = ({
               <span className="font-medium text-gray-500 w-12 text-right">{avg.prot.toFixed(0)}g P</span>
               <span className="font-medium text-gray-500 w-12 text-right">{avg.carbs.toFixed(0)}g C</span>
               <span className="font-medium text-gray-500 w-12 text-right">{avg.fat.toFixed(0)}g G</span>
-              {/* Spacer invisible para alinear con los iconos de las opciones (52px de acciones + 12px ml-3 + ~7px de borde/padding extra de la card) */}
-              <span className="w-[71px] flex-shrink-0" aria-hidden="true" />
+              {/* Expandir / colapsar todas las opciones */}
+              <span className="w-[71px] flex-shrink-0 flex items-center justify-end pr-[7px]">
+                {meal.options.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleAll(); }}
+                    className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-[#F0EDE8] transition-colors"
+                    title={allCollapsed ? t('consultation.meals.expandAll') : t('consultation.meals.collapseAll')}
+                  >
+                    {allCollapsed ? <ChevronsUpDown className="w-3.5 h-3.5" /> : <ChevronsDownUp className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+              </span>
             </div>
           );
         })()}
@@ -208,7 +285,7 @@ const MealItem: React.FC<MealItemProps> = ({
             const optionProtein = option.ingredients.reduce((sum, i) => sum + (Number(i.protein || 0) * Number(i.quantity || 0) / 100), 0);
             const optionCarbs = option.ingredients.reduce((sum, i) => sum + (Number(i.carbs || 0) * Number(i.quantity || 0) / 100), 0);
             const optionFat = option.ingredients.reduce((sum, i) => sum + (Number(i.fat || 0) * Number(i.quantity || 0) / 100), 0);
-            const isExpanded = expandedOptions === optionIndex;
+            const isExpanded = !collapsedOptions.has(optionIndex);
             const showInstructions = showInstructionsMap[optionIndex] ?? false;
             const hasContent = option.ingredients.length > 0 || !!option.content;
 
@@ -268,17 +345,38 @@ const MealItem: React.FC<MealItemProps> = ({
                 <div className={`grid transition-all duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="overflow-hidden">
                     {/* ===== MODO VISTA — lista plana sin cajas anidadas ===== */}
-                    <div className="px-4 py-2">
-                      {/* Descripción estilo nota */}
+                    <div
+                      className="px-4 py-2 cursor-pointer transition-colors hover:bg-[#F4F2EE]"
+                      onClick={() => setEditingOptionIndex(optionIndex)}
+                      title={t('consultation.meals.clickEdit') || 'Click para editar'}
+                    >
+                      {/* Descripción estilo nota — recortada a 2 líneas con "ver más" */}
                       {option.content && (
                         <div className="mb-3 px-3 py-2 rounded-r-sm" style={{ backgroundColor: '#FBF7E8', borderLeft: '2px solid #E8DCB0' }}>
-                          <p className="text-[11px] text-gray-700 leading-relaxed italic first-letter:uppercase">{option.content}</p>
+                          <p
+                            className={`text-[11px] text-gray-700 leading-relaxed italic first-letter:uppercase ${descExpanded.has(optionIndex) ? '' : 'line-clamp-2'}`}
+                          >
+                            {option.content}
+                          </p>
+                          {option.content.length > 100 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDescExpanded(prev => { const n = new Set(prev); n.has(optionIndex) ? n.delete(optionIndex) : n.add(optionIndex); return n; });
+                              }}
+                              className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-700 hover:text-emerald-800"
+                            >
+                              {descExpanded.has(optionIndex) ? t('consultation.meals.seeLess') : t('consultation.meals.seeMore')}
+                              <ChevronDown className={`w-3 h-3 transition-transform ${descExpanded.has(optionIndex) ? 'rotate-180' : ''}`} />
+                            </button>
+                          )}
                         </div>
                       )}
 
                       {/* Ingredientes en modo vista — fila simple */}
                       {option.ingredients.length > 0 && (
-                        <ul className="divide-y" style={{ borderColor: '#F0EDE8' }}>
+                        <ul className="divide-y divide-[#F0EDE8]">
                           {option.ingredients.map((ingredient, ingredientIndex) => (
                             <li key={ingredientIndex} className="flex items-center justify-between py-1 text-[11px]">
                               <div className="flex items-center gap-1.5 truncate">
@@ -344,7 +442,7 @@ const MealItem: React.FC<MealItemProps> = ({
                         <SaveMealOption
                           mealName={option.name || ''}
                           option={{ ...option, name: option.name || '' }}
-                          onSaveSuccess={() => { alert('Opción de comida guardada correctamente'); }}
+                          onSaveSuccess={() => { /* feedback visual en el propio modal (check) */ }}
                         />
                         <LoadSavedMeal
                           onSelect={(savedOption) => {
@@ -366,10 +464,12 @@ const MealItem: React.FC<MealItemProps> = ({
                                 preparations: ingredient.preparations,
                                 baseName: ingredient.baseName,
                                 prepKey: ingredient.prepKey,
+                                unit: ingredient.unit,
                               })),
                             };
                             updatedMeals[mealIndex].options[optionIndex] = newOption;
                             onMealsChange(updatedMeals);
+                            ensureExpanded(optionIndex);
                           }}
                         />
                         <button
@@ -688,11 +788,11 @@ const Meals: React.FC<MealsProps> = ({
 
   return (
     <div className="w-full p-2.5 flex flex-col gap-2" style={{ backgroundColor: '#FAF9F7' }}>
-      {/* Usar el componente MealItem para cada comida */}
-      {meals.map((meal, mealIndex) => (
+      {/* Usar el componente MealItem para cada comida — ordenadas por hora (más temprana arriba) */}
+      {orderedMealIndices(meals).map((mealIndex) => (
         <MealItem
           key={mealIndex}
-          meal={meal}
+          meal={meals[mealIndex]}
           mealIndex={mealIndex}
           meals={meals}
           onMealsChange={onMealsChange}

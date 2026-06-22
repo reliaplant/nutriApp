@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { 
   CheckmarkFilled, 
@@ -8,26 +8,27 @@ import {
   Strawberry 
 } from '@carbon/icons-react';
 import PrintNutritionPlan from '@/app/consulta/components/printPDF';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Star, FolderOpen, X, Search, ClipboardList, AlertTriangle } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import moment from 'moment';
 import 'moment/locale/pt-br';
 import 'moment/locale/es';
 import Meals, { Meal } from '../components/meals';
 import { getCommonIngredients } from '../components/ingredientsData';
-import { patientService, consultationService, authService } from '@/app/shared/firebase';
+import { patientService, consultationService, authService, planService, SavedPlan } from '@/app/shared/firebase';
+import { TagEditor, computeTagOptions, tagsOf, TagUsage } from '@/app/shared/TagEditor';
 import { useAuth } from '@/app/shared/AuthContext';
 import { Patient, Consultation } from '@/app/shared/interfaces';
 import { MealCategory } from '@/app/comidas/constants';
 import { useTranslation } from '@/app/shared/useTranslation';
 
 // Comidas por defecto
-const DEFAULT_MEALS: { category: MealCategory; time: string }[] = [
-  { category: 'desayuno', time: '07:00' },
-  { category: 'mediaManana', time: '10:00' },
-  { category: 'almuerzo', time: '12:30' },
-  { category: 'lunchTarde', time: '16:00' },
-  { category: 'cena', time: '19:30' },
+const DEFAULT_MEALS: { name: string; category: MealCategory; time: string }[] = [
+  { name: 'Desayuno', category: 'desayuno', time: '07:00' },
+  { name: 'Snack de la mañana', category: 'snack', time: '10:00' },
+  { name: 'Almuerzo', category: 'almuerzo', time: '12:30' },
+  { name: 'Snack de la tarde', category: 'snack', time: '16:00' },
+  { name: 'Cena', category: 'cena', time: '19:30' },
 ];
 
 // Constantes nutricionales
@@ -120,6 +121,8 @@ export default function CrearPlan() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [dirty, setDirty] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [finalizingConsultation, setFinalizingConsultation] = useState(false);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
   const [currentStep, setCurrentStep] = useState<'setup' | 'plan'>('setup');
@@ -352,7 +355,7 @@ export default function CrearPlan() {
             }
             // Crear comidas por defecto para consulta nueva — todas activas y con una opción inicial
             const defaultMeals: Meal[] = DEFAULT_MEALS.map(m => ({
-              name: '',
+              name: m.name,
               time: m.time,
               category: m.category,
               isActive: true,
@@ -395,10 +398,11 @@ export default function CrearPlan() {
         meal.options.forEach(option => {
           if (option.isSelectedForSummary) {
             option.ingredients.forEach(ingredient => {
-              totals.calories += ingredient.calories || 0;
-              totals.protein += ingredient.protein || 0;
-              totals.carbs += ingredient.carbs || 0;
-              totals.fat += ingredient.fat || 0;
+              const q = Number(ingredient.quantity || 0);
+              totals.calories += (Number(ingredient.calories || 0) * q) / 100;
+              totals.protein  += (Number(ingredient.protein  || 0) * q) / 100;
+              totals.carbs    += (Number(ingredient.carbs    || 0) * q) / 100;
+              totals.fat      += (Number(ingredient.fat      || 0) * q) / 100;
             });
           }
         });
@@ -451,7 +455,9 @@ export default function CrearPlan() {
     try {
       setSaveStatus('saving');
       
-      const nutritionPlan = {
+      // Firestore no acepta `undefined` (p.ej. unit/prepKey en ingredientes):
+      // limpiamos en profundidad con un round-trip JSON.
+      const nutritionPlan = JSON.parse(JSON.stringify({
         objectivesSet: true,
         meals: meals,
         notes: notasContent,
@@ -464,7 +470,7 @@ export default function CrearPlan() {
         totalNutrition: totalNutrition,
         nutritionParams: nutritionParams,
         lastUpdated: new Date().toISOString()
-      };
+      }));
 
       await consultationService.updateConsultation(
         patientId, 
@@ -472,6 +478,7 @@ export default function CrearPlan() {
         { nutritionPlan }
       );
       
+      setDirty(false);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
@@ -480,6 +487,118 @@ export default function CrearPlan() {
       setTimeout(() => setSaveStatus('idle'), 2500);
     }
   };
+
+  // ── Planes reutilizables (guardar / cargar plantilla completa) ──
+  const [showSavePlan, setShowSavePlan] = useState(false);
+  const [planName, setPlanName] = useState('');
+  const [planTags, setPlanTags] = useState<string[]>([]);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [planSaved, setPlanSaved] = useState(false);
+  const [tagSuggestions, setTagSuggestions] = useState<TagUsage[]>([]);
+  const [tagLibrary, setTagLibrary] = useState<string[]>([]);
+
+  const [showLoadPlan, setShowLoadPlan] = useState(false);
+  const [loadablePlans, setLoadablePlans] = useState<SavedPlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [planSearch, setPlanSearch] = useState('');
+  const [loadPlanIndicaciones, setLoadPlanIndicaciones] = useState(true);
+  const [pendingPlan, setPendingPlan] = useState<SavedPlan | null>(null);
+
+  const planHasContent = useMemo(
+    () => meals.some(m => Array.isArray((m as Meal).options) && (m as Meal).options.length > 0),
+    [meals]
+  );
+
+  const handleCreateTag = async (tag: string) => {
+    setTagLibrary(lib => (lib.includes(tag) ? lib : [...lib, tag]));
+    setTagSuggestions(opts => (opts.some(o => o.tag === tag) ? opts : [...opts, { tag, count: 0 }]));
+    try { await planService.saveTagLibrary([...new Set([...tagLibrary, tag])]); } catch { /* se reintenta luego */ }
+  };
+
+  const openSavePlan = async () => {
+    setPlanName(patient?.name ? t('plans.planOfName').replace('{name}', patient.name) : t('plans.newPlanName'));
+    setPlanTags([]);
+    setPlanSaved(false);
+    setShowSavePlan(true);
+    try {
+      const [all, lib] = await Promise.all([planService.getPlans(), planService.getTagLibrary()]);
+      setTagLibrary(lib);
+      setTagSuggestions(computeTagOptions(lib, all));
+    } catch { /* sin etiquetas previas */ }
+  };
+
+  const doSavePlan = async () => {
+    const name = planName.trim();
+    if (!name) return;
+    setSavingPlan(true);
+    try {
+      await planService.createPlan({
+        name,
+        tags: planTags.length ? planTags : undefined,
+        meals: meals as unknown[],
+        indicaciones: indicacionesContent.trim() || undefined,
+        totalNutrition: totalNutrition,
+        targetCalories: theoreticalValues?.dailyCalories,
+        mealsCount: meals.length,
+      });
+      setPlanSaved(true);
+      setTimeout(() => { setShowSavePlan(false); setPlanSaved(false); }, 1100);
+    } catch (err) {
+      console.error('Error al guardar el plan:', err);
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const openLoadPlan = async () => {
+    setPlanSearch('');
+    setLoadPlanIndicaciones(true);
+    setShowLoadPlan(true);
+    setLoadingPlans(true);
+    try {
+      setLoadablePlans(await planService.getPlans());
+    } catch (err) {
+      console.error('Error al cargar planes:', err);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  const requestLoadPlan = (plan: SavedPlan) => {
+    if (planHasContent) {
+      setPendingPlan(plan);
+    } else {
+      applyPlan(plan);
+    }
+  };
+
+  const applyPlan = (plan: SavedPlan) => {
+    const planMeals = JSON.parse(JSON.stringify(plan.meals || [])) as Meal[];
+    setMeals(planMeals);
+    if (loadPlanIndicaciones && typeof plan.indicaciones === 'string' && plan.indicaciones.trim()) {
+      setIndicacionesContent(plan.indicaciones);
+    }
+    if (typeof plan.id === 'string') {
+      planService.updatePlan(plan.id, { usageCount: (plan.usageCount || 0) + 1, lastUsedDate: new Date().toISOString() } as Partial<SavedPlan>).catch(() => {});
+    }
+    setPendingPlan(null);
+    setShowLoadPlan(false);
+  };
+
+  // ── Autoguardado con debounce ──
+  // Mucha gente olvida guardar; guardamos solos 2 s después del último cambio.
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (loading) return;
+    if (!hydratedRef.current) { hydratedRef.current = true; return; } // saltar primer render tras cargar
+    if (!patientId || !consultationId) return;
+    setDirty(true);
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => { savePlan(); }, 2000);
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meals, notasContent, indicacionesContent, measurements, nutritionParams]);
 
   // Finalizar consulta
   const finalizeConsultation = async () => {
@@ -498,6 +617,32 @@ export default function CrearPlan() {
     } catch (err) {
       console.error('Error al finalizar consulta:', err);
       setFinalizingConsultation(false);
+    }
+  };
+
+  // Marcar como completada SIN salir de la página (se sigue pudiendo editar / reabrir).
+  const markCompleted = async () => {
+    if (!patientId || !consultationId) return;
+    try {
+      setFinalizingConsultation(true);
+      await savePlan();
+      await consultationService.completeConsultation(patientId, consultationId, editableData.weight);
+      setConsultation(c => (c ? { ...c, status: 'completed' } : c));
+    } catch (err) {
+      console.error('Error al marcar como completada:', err);
+    } finally {
+      setFinalizingConsultation(false);
+    }
+  };
+
+  // Reabrir una consulta completada (volver a "en progreso")
+  const reopenConsultation = async () => {
+    if (!patientId || !consultationId) return;
+    try {
+      await consultationService.reopenConsultation(patientId, consultationId);
+      setConsultation(c => (c ? { ...c, status: 'scheduled' } : c));
+    } catch (err) {
+      console.error('Error al reabrir consulta:', err);
     }
   };
 
@@ -549,6 +694,24 @@ export default function CrearPlan() {
         </div>
         {currentStep === 'plan' && (
         <div className="flex items-center gap-2 px-4">
+          {/* Guardar / cargar plan completo (reutilizable) — UI por ahora */}
+          <button
+            onClick={openSavePlan}
+            title={t('plans.savePlanBtnTitle')}
+            className="group flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+          >
+            <Star size={13} className="transition-colors group-hover:text-yellow-400 group-hover:fill-yellow-400" />
+            {t('plans.savePlanBtn')}
+          </button>
+          <button
+            onClick={openLoadPlan}
+            title={t('plans.loadPlanBtnTitle')}
+            className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+          >
+            <FolderOpen size={13} />
+            {t('plans.loadPlanBtn')}
+          </button>
+          <span className="w-px h-4 bg-gray-200" />
           <PrintNutritionPlan
             patient={patient}
             consultation={consultation}
@@ -566,99 +729,85 @@ export default function CrearPlan() {
             nutritionistPhone={userData?.phone}
             nutritionistEmail={userData?.email}
           />
-          <button 
-            onClick={savePlan}
-            disabled={saveStatus === 'saving'}
-            className={`px-2.5 py-1 rounded text-[11px] font-medium flex items-center justify-center transition-all duration-300 ${
-              saveStatus === 'saved'
-                ? 'bg-emerald-600 text-white'
-                : saveStatus === 'error'
-                ? 'bg-red-600 text-white'
-                : saveStatus === 'saving'
-                ? 'bg-emerald-600/70 text-white cursor-not-allowed'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-            }`}
-          >
+          {/* Indicador de autoguardado (sin botón: se guarda solo) */}
+          <div className="px-2 py-1 text-[11px] font-medium flex items-center gap-1.5 select-none">
             {saveStatus === 'saving' ? (
               <>
-                <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1.5" />
-                {t('consultation.saveStatus.saving')}
-              </>
-            ) : saveStatus === 'saved' ? (
-              <>
-                <CheckmarkFilled size={14} className="mr-1.5" />
-                {t('consultation.saveStatus.saved')}
+                <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin" />
+                <span className="text-gray-500">{t('consultation.saveStatus.saving')}</span>
               </>
             ) : saveStatus === 'error' ? (
-              t('consultation.saveStatus.error')
+              <span className="text-red-600">{t('consultation.saveStatus.error')}</span>
+            ) : dirty ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                <span className="text-red-600">Cambios sin guardar</span>
+              </>
             ) : (
               <>
-                <CheckmarkFilled size={14} className="mr-1.5" />
-                {t('common.save')}
+                <CheckmarkFilled size={14} className="text-emerald-600" />
+                <span className="text-gray-500">Cambios guardados</span>
               </>
             )}
-          </button>
+          </div>
           {consultation?.status !== 'completed' && (
-            <>
-              <button
-                onClick={finishLater}
-                disabled={finishingLater || finalizingConsultation || saveStatus === 'saving'}
-                className="px-2.5 py-1 rounded text-[11px] font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                title={t('consultation.finishLater')}
-              >
-                {finishingLater ? t('consultation.finishingLater') : t('consultation.finishLater')}
-              </button>
-              <button
-                onClick={() => setShowFinalizeConfirm(true)}
-                disabled={finalizingConsultation || finishingLater}
-                className="px-2.5 py-1 rounded text-[11px] font-medium border border-emerald-600 text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {t('consultation.finalize')}
-              </button>
-            </>
+            <button
+              onClick={finishLater}
+              disabled={finishingLater || finalizingConsultation || saveStatus === 'saving'}
+              className="px-2.5 py-1 rounded text-[11px] font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              title={t('consultation.finishLater')}
+            >
+              {finishingLater ? t('consultation.finishingLater') : t('consultation.finishLater')}
+            </button>
           )}
-          {consultation?.status === 'completed' && (
-            <span className="text-[10px] text-gray-500 flex items-center gap-1">
-              <CheckmarkFilled size={12} className="text-emerald-600" />
-              {t('consultation.completed')}
-            </span>
-          )}
+
+          {/* Estado de la dieta — select redondeado (en progreso ⇄ completada) */}
+          {(() => {
+            const isCompleted = consultation?.status === 'completed';
+            return (
+              <div className="relative">
+                <button
+                  onClick={() => setStatusMenuOpen(o => !o)}
+                  disabled={finalizingConsultation || finishingLater}
+                  className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-full text-[11px] font-medium border transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={isCompleted
+                    ? { borderColor: '#6EE7B7', backgroundColor: '#ECFDF5', color: '#047857' }
+                    : { borderColor: '#E8D9A8', backgroundColor: '#FBF7E8', color: '#9A7B1F' }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: isCompleted ? '#059669' : '#D9A21B' }} />
+                  {isCompleted ? 'Completada' : 'En progreso'}
+                  <ChevronDown className="w-3 h-3 opacity-70" />
+                </button>
+                {statusMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpen(false)} />
+                    <div className="absolute right-0 mt-1.5 z-50 w-56 rounded-lg bg-white py-1 shadow-lg" style={{ border: '1px solid #E8E5DE' }}>
+                      <div className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wider" style={{ color: '#A8A29E' }}>Estado de la dieta</div>
+                      <button
+                        type="button"
+                        onClick={() => { setStatusMenuOpen(false); if (isCompleted) reopenConsultation(); }}
+                        className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 text-gray-700 hover:bg-[#FAF9F7]"
+                      >
+                        <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#D9A21B' }} />En progreso</span>
+                        {!isCompleted && <CheckmarkFilled size={12} className="text-emerald-600" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setStatusMenuOpen(false); if (!isCompleted) markCompleted(); }}
+                        className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 text-gray-700 hover:bg-[#FAF9F7]"
+                      >
+                        <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#059669' }} />Completada</span>
+                        {isCompleted && <CheckmarkFilled size={12} className="text-emerald-600" />}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
         )}
       </div>
-
-      {/* Modal de confirmación para finalizar */}
-      {showFinalizeConfirm && (
-        <div className="fixed inset-0 bg-black/35 flex items-center justify-center z-50">
-          <div className="bg-white rounded-md w-full max-w-sm overflow-hidden" style={{ border: '1px solid #E8E5DE', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-            <div className="px-5 py-3 border-b border-gray-100">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{t('consultation.breadcrumb.consult')}</p>
-              <p className="text-sm font-semibold text-gray-800 mt-0.5">{t('consultation.finalizeModal.title')}</p>
-            </div>
-            <div className="px-5 py-4">
-              <p className="text-[12px] text-gray-600">
-                {t('consultation.finalizeModal.body')}
-              </p>
-            </div>
-            <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
-              <button
-                onClick={() => setShowFinalizeConfirm(false)}
-                className="px-3 py-1 border border-gray-300 rounded text-[11px] text-gray-700 hover:bg-white transition-colors"
-                disabled={finalizingConsultation}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => { setShowFinalizeConfirm(false); finalizeConsultation(); }}
-                className="px-3 py-1 bg-emerald-600 text-white rounded text-[11px] font-medium hover:bg-emerald-700 transition-colors"
-                disabled={finalizingConsultation}
-              >
-                {finalizingConsultation ? t('consultation.finalizing') : t('consultation.finalizeModal.confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* === SETUP WIZARD === */}
       {currentStep === 'setup' && (
@@ -1373,6 +1522,159 @@ export default function CrearPlan() {
           />
         </div>
       </div>
+      )}
+
+      {/* ── Modal: Guardar plan como plantilla ── */}
+      {showSavePlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !savingPlan && setShowSavePlan(false)} />
+          <div className="relative bg-white rounded-md shadow-2xl w-full max-w-md overflow-hidden" style={{ border: '1px solid #E8E5DE' }}>
+            {planSaved ? (
+              <div className="px-6 py-10 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center mb-3">
+                  <CheckmarkFilled size={24} className="text-white" />
+                </div>
+                <p className="text-sm font-semibold text-gray-800">{t('plans.saved')}</p>
+                <p className="text-[11px] text-gray-500 mt-1">{t('plans.savedHint')}</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <Star size={14} className="text-yellow-400 fill-yellow-400" />
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">{t('plans.savePlanTitle')}</span>
+                  </div>
+                  <button onClick={() => setShowSavePlan(false)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+                </div>
+                <div className="px-5 py-4 space-y-3">
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 block mb-1.5">{t('plans.name')}</label>
+                    <input
+                      type="text" autoFocus value={planName} onChange={(e) => setPlanName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') doSavePlan(); }}
+                      className="w-full px-3 py-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-[#E0DCD4] text-gray-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 block mb-1.5">{t('plans.tags')} <span className="text-gray-300 normal-case font-normal">{t('plans.tagsOptional')}</span></label>
+                    <TagEditor value={planTags} onChange={setPlanTags} options={tagSuggestions} onCreate={handleCreateTag} />
+                  </div>
+                  <p className="text-[10px] text-gray-400">{t('plans.saveFullHint').replace('{n}', String(meals.length))}</p>
+                </div>
+                <div className="px-5 py-2.5 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-2">
+                  <button onClick={() => setShowSavePlan(false)} className="text-xs px-3 py-1.5 rounded text-gray-600 hover:bg-gray-100">{t('plans.cancel')}</button>
+                  <button onClick={doSavePlan} disabled={savingPlan || !planName.trim()} className="text-xs px-4 py-1.5 rounded font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5">
+                    {savingPlan && <span className="inline-block w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                    {t('plans.save')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Cargar plan guardado ── */}
+      {showLoadPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowLoadPlan(false)} />
+          <div className="relative bg-white rounded-md shadow-2xl w-full max-w-md overflow-hidden flex flex-col" style={{ border: '1px solid #E8E5DE', maxHeight: '80vh' }}>
+            <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <FolderOpen size={14} className="text-gray-500" />
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">{t('plans.loadPlanTitle')}</span>
+              </div>
+              <button onClick={() => setShowLoadPlan(false)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+            </div>
+            <div className="px-4 pt-3 pb-2 flex-shrink-0">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
+                <input
+                  type="text" placeholder={t('plans.searchPlan')} value={planSearch} onChange={(e) => setPlanSearch(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 text-xs rounded w-full focus:outline-none focus:ring-1 focus:ring-emerald-200 bg-white border border-[#CCC9C3] text-gray-800"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setLoadPlanIndicaciones(v => !v)}
+                className="mt-2 w-full flex items-center justify-between gap-3 rounded-sm px-3 py-1.5 border border-[#E8E5DE] bg-[#FAF9F7]"
+              >
+                <span className="text-[11px] font-medium text-gray-600">{t('plans.importIndications')}</span>
+                <span className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${loadPlanIndicaciones ? 'bg-emerald-600' : 'bg-gray-300'}`}>
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${loadPlanIndicaciones ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {loadingPlans ? (
+                <div className="py-10 flex items-center justify-center">
+                  <span className="inline-block w-6 h-6 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+                </div>
+              ) : (() => {
+                const term = planSearch.toLowerCase().trim();
+                const list = loadablePlans.filter(p => !term || p.name?.toLowerCase().includes(term) || (p.group || '').toLowerCase().includes(term));
+                if (list.length === 0) {
+                  return (
+                    <div className="py-10 flex flex-col items-center justify-center text-center text-gray-400">
+                      <ClipboardList className="w-8 h-8 mb-2 opacity-40" />
+                      <p className="text-xs">{loadablePlans.length === 0 ? t('plans.emptyNone') : t('plans.emptyNoResults')}</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1.5">
+                    {list.map(p => (
+                      <button
+                        key={p.id} onClick={() => requestLoadPlan(p)}
+                        className="w-full text-left bg-white rounded-md p-2.5 transition-all hover:shadow-sm hover:border-emerald-300"
+                        style={{ border: '1px solid #E8E5DE' }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-semibold text-gray-800 truncate">{p.name}</span>
+                              {tagsOf(p).map(tag => (
+                                <span key={tag} className="px-1.5 py-px rounded-full bg-[#F0EDE8] text-gray-600 text-[9px] font-medium">{tag}</span>
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mt-0.5 tabular-nums">
+                              <span>{p.mealsCount ?? (Array.isArray(p.meals) ? p.meals.length : 0)} {t('plans.mealsSuffix')}</span>
+                              <span className="text-gray-300">·</span>
+                              <span className="font-semibold text-gray-700">{Math.round(p.totalNutrition?.calories || 0)} kcal</span>
+                              {p.indicaciones?.trim() && <span className="ml-1 px-1.5 py-px rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-medium normal-case tracking-normal">{t('plans.indicationsBadge')}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirmar reemplazo del plan actual ── */}
+      {pendingPlan && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setPendingPlan(null)} />
+          <div className="relative bg-white rounded-md shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="px-5 py-4 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900">{t('plans.replaceTitle')}</h3>
+                <p className="text-xs text-gray-500 mt-1">{t('plans.replaceBody').replace('{name}', pendingPlan.name)}</p>
+              </div>
+            </div>
+            <div className="px-5 py-2.5 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button onClick={() => setPendingPlan(null)} className="text-xs px-3 py-1.5 rounded text-gray-600 hover:bg-gray-100">{t('plans.cancel')}</button>
+              <button onClick={() => applyPlan(pendingPlan)} className="text-xs px-4 py-1.5 rounded font-semibold text-white bg-emerald-600 hover:bg-emerald-700">{t('plans.replace')}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

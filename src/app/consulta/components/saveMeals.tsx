@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Save, Bookmark, Sparkles } from 'lucide-react';
+import { X, Save, Bookmark, Check } from 'lucide-react';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db, authService } from '@/app/shared/firebase';
 import { MealOption } from '@/app/consulta/components/meals';
@@ -21,11 +21,9 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
   const getInitialCategory = (): MealCategory => {
     const lowerName = (mealName || '').toLowerCase();
     if (lowerName.includes('desayun')) return 'desayuno';
-    if (lowerName.includes('media mañana')) return 'mediaManana';
-    if (lowerName.includes('almuerz')) return 'almuerzo';
-    if (lowerName.includes('lunch') || lowerName.includes('meriend')) return 'lunchTarde';
+    if (lowerName.includes('almuerz') || lowerName.includes('comida')) return 'almuerzo';
     if (lowerName.includes('cena')) return 'cena';
-    return 'general';
+    return 'snack';
   };
 
   const [category, setCategory] = useState<MealCategory>(getInitialCategory());
@@ -82,10 +80,12 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
         return;
       }
       const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      // Firestore no acepta `undefined`: limpiamos en profundidad (JSON drop) el mealOption.
+      const cleanOption = JSON.parse(JSON.stringify({ ...option, name: savedName.trim() }));
       await setDoc(doc(db, `users/${user.uid}/savedMealOptions`, id), {
         name: savedName.trim(),
         category,
-        mealOption: { ...option, name: savedName.trim() },
+        mealOption: cleanOption,
         totalNutrition,
         createdAt: Timestamp.now(),
       });
@@ -94,7 +94,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
         setJustSaved(false);
         setIsOpen(false);
         if (onSaveSuccess) onSaveSuccess();
-      }, 900);
+      }, 1300);
     } catch (err) {
       console.error('Error al guardar opción:', err);
       setError(t('consultation.saveMeal.error'));
@@ -120,10 +120,24 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !isSaving && setIsOpen(false)}>
           <div
-            className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden flex flex-col"
+            className="relative bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden flex flex-col"
             style={{ border: '1px solid #E8E5DE' }}
             onClick={(e) => e.stopPropagation()}
           >
+            <style>{`@keyframes nutriLoadBar{0%{left:-45%}100%{left:100%}}@keyframes nutriPop{0%{transform:scale(0.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}`}</style>
+
+            {/* Estado de éxito: el modal se vuelve un check */}
+            {justSaved && (
+              <div className="absolute inset-0 z-10 bg-white flex flex-col items-center justify-center text-center px-6">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#059669', animation: 'nutriPop 0.35s ease-out' }}>
+                  <Check className="w-8 h-8 text-white" strokeWidth={3} />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900">{t('consultation.saveMeal.saved')}</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  <span className="font-medium text-gray-700">{savedName.trim()}</span> · {t('consultation.saveMeal.subtitle')}
+                </p>
+              </div>
+            )}
             {/* Header — minimalista */}
             <div className="flex items-center justify-between px-5 pt-4 pb-3">
               <div className="flex items-center gap-2">
@@ -143,6 +157,13 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Barra de carga al guardar */}
+            {isSaving && (
+              <div className="relative h-1 overflow-hidden" style={{ backgroundColor: '#E8E5DE' }}>
+                <div className="absolute top-0 h-full rounded-full" style={{ width: '45%', backgroundColor: '#059669', animation: 'nutriLoadBar 0.9s ease-in-out infinite' }} />
+              </div>
+            )}
 
             {/* Body */}
             <div className="px-5 pb-4 space-y-4">
@@ -273,7 +294,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
               >
                 {justSaved ? (
                   <>
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Check className="w-3.5 h-3.5" />
                     {t('consultation.saveMeal.saved')}
                   </>
                 ) : isSaving ? (

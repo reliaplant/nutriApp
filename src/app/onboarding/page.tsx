@@ -109,7 +109,7 @@ export default function OnboardingPage() {
       }
 
       if (Object.keys(payload).length > 0) {
-        await updateDoc(doc(db, 'users', firebaseUser.uid), payload);
+        await updateDoc(doc(db, 'users', firebaseUser.uid), payload as Record<string, any>);
         await refreshUserData();
       }
 

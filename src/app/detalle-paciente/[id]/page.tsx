@@ -23,7 +23,6 @@ import {
 import { Line } from 'react-chartjs-2';
 import { Consultation } from '@/app/shared/firebase';
 import { CheckCircle2, AlertCircle, Calendar, FileText, Trash2, Pencil, Plus, ChevronRight, Play, RotateCcw, Info } from 'lucide-react';
-import AnthropometrySection from './AnthropometrySection';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 
@@ -1231,9 +1230,6 @@ const PatientDetailPage = () => {
                 </div>
               ) : <p className="text-xs text-gray-400 text-center py-6">{t('patientDetail.documents.empty')}</p>}
             </div>
-
-            {/* ANTROPOMETRÍA */}
-            <AnthropometrySection patientId={patientId} />
           </>
         ) : (
           <div className="bg-white rounded-md p-5" style={{ border: '1px solid #E8E5DE' }}>

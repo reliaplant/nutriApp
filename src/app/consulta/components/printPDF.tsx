@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import jsPDF from 'jspdf';
-import { Meal } from '@/app/consulta/components/meals';
+import { Meal, sortMealsByTime } from '@/app/consulta/components/meals';
 import { Patient } from '@/app/shared/interfaces';
 import { Consultation } from '@/app/shared/interfaces';
 import { Printer } from 'lucide-react';
@@ -34,22 +34,22 @@ interface PrintNutritionPlanProps {
   nutritionistEmail?: string;
 }
 
-// Emerald palette
+// Paleta cálida — combina con la estética de la app (crema + emerald sutil)
 const COLORS = {
-  primary: [16, 185, 129] as [number, number, number],       // emerald-500
-  primaryDark: [5, 150, 105] as [number, number, number],    // emerald-600
-  primaryLight: [209, 250, 229] as [number, number, number], // emerald-100
+  primary: [5, 150, 105] as [number, number, number],        // emerald-600 (acento)
+  primaryDark: [4, 120, 87] as [number, number, number],     // emerald-700
+  primaryLight: [167, 243, 208] as [number, number, number], // emerald-200
   primaryBg: [236, 253, 245] as [number, number, number],    // emerald-50
-  text: [17, 24, 39] as [number, number, number],            // gray-900
-  textMuted: [107, 114, 128] as [number, number, number],    // gray-500
-  textLight: [156, 163, 175] as [number, number, number],    // gray-400
-  border: [229, 231, 235] as [number, number, number],       // gray-200
-  bgLight: [249, 250, 251] as [number, number, number],      // gray-50
-  bgMedium: [243, 244, 246] as [number, number, number],     // gray-100
+  text: [45, 43, 40] as [number, number, number],            // #2D2B28
+  textMuted: [107, 102, 96] as [number, number, number],     // #6B6660
+  textLight: [168, 162, 158] as [number, number, number],    // #A8A29E
+  border: [232, 229, 222] as [number, number, number],       // #E8E5DE
+  bgLight: [250, 249, 247] as [number, number, number],      // #FAF9F7
+  bgMedium: [244, 242, 238] as [number, number, number],     // #F4F2EE
   white: [255, 255, 255] as [number, number, number],
-  protein: [59, 130, 246] as [number, number, number],       // blue-500
-  carbs: [245, 158, 11] as [number, number, number],         // amber-500
-  fat: [239, 68, 68] as [number, number, number],            // red-500
+  protein: [239, 68, 68] as [number, number, number],        // rojo (P, como la app)
+  carbs: [245, 158, 11] as [number, number, number],         // ámbar (C)
+  fat: [59, 130, 246] as [number, number, number],           // azul (G)
 };
 
 const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
@@ -143,7 +143,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       const addHeader = () => {
         // Top emerald bar
         setFill(COLORS.primary);
-        doc.rect(0, 0, pageWidth, 3, 'F');
+        doc.rect(0, 0, pageWidth, 1.5, 'F');
 
         yPos = 10;
 
@@ -205,7 +205,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
 
         // Divider
         yPos += 7;
-        drawLine(margin, yPos, pageWidth - margin, yPos, COLORS.primary);
+        drawLine(margin, yPos, pageWidth - margin, yPos, COLORS.border);
         yPos += 8;
       };
 
@@ -245,7 +245,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         // Section label
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
-        setColor(COLORS.primary);
+        setColor(COLORS.textMuted);
         doc.text(t('consultation.pdf.patient'), margin, yPos);
         yPos += 5;
 
@@ -291,13 +291,13 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7);
-      setColor(COLORS.primary);
+      setColor(COLORS.textMuted);
       doc.text(t('consultation.pdf.nutritionSummary'), margin, yPos);
       yPos += 7;
 
       // Calorie card
-      setFill(COLORS.primaryBg);
-      setDraw(COLORS.primaryLight);
+      setFill(COLORS.bgLight);
+      setDraw(COLORS.border);
       doc.setLineWidth(0.4);
       drawRoundedRect(margin, yPos, contentWidth, 18, 2, 'FD');
 
@@ -372,8 +372,8 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       yPos += 8;
 
       // ── Distribución kcal por comida ──
-      const mealKcalTotals = meals
-        .filter(m => m.options && m.options.length > 0)
+      const mealKcalTotals = sortMealsByTime(meals)
+        .filter(m => m.options && m.options.length > 0 && m.isActive !== false)
         .map(m => {
           const opt = m.options[0];
           const kcal = (opt.ingredients || []).reduce(
@@ -388,7 +388,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         checkNewPage(22);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
-        setColor(COLORS.primary);
+        setColor(COLORS.textMuted);
         doc.text(t('consultation.pdf.kcalDistribution'), margin, yPos);
         yPos += 5;
 
@@ -436,16 +436,17 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       // ── Meals ──
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7);
-      setColor(COLORS.primary);
+      setColor(COLORS.textMuted);
       doc.text(t('consultation.pdf.plan'), margin, yPos);
       yPos += 7;
 
-      meals.forEach((meal) => {
+      sortMealsByTime(meals).forEach((meal) => {
         if (!meal.options || meal.options.length === 0) return;
+        if (meal.isActive === false) return;
 
         // Meal header bar
         checkNewPage(20);
-        setFill(COLORS.primaryBg);
+        setFill(COLORS.bgLight);
         drawRoundedRect(margin, yPos, contentWidth, 9, 1.5, 'F');
 
         // Emerald dot
@@ -528,23 +529,36 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
                 doc.rect(margin, yPos - 3.5, contentWidth, 6, 'F');
               }
 
+              // Escalar por la cantidad real (los valores base son por 100 g).
+              const q = Number(ing.quantity || 0);
+              const kcal = (Number(ing.calories || 0) * q) / 100;
+              const prot = (Number(ing.protein || 0) * q) / 100;
+              const carb = (Number(ing.carbs || 0) * q) / 100;
+              const fatv = (Number(ing.fat || 0) * q) / 100;
+
+              // Mostrar la medida casera si existe (ej. "1 taza"), si no, gramos.
+              const u = (ing as { unit?: { label: string; g: number } }).unit;
+              const qtyText = u && u.label && u.label !== 'g' && u.g > 0
+                ? `${+(q / u.g).toFixed(2)} ${u.label}`
+                : `${q} g`;
+
               doc.setFont("helvetica", "normal");
               doc.setFontSize(8);
               setColor(COLORS.text);
 
-              const nameText = ing.name.length > 28 ? ing.name.substring(0, 26) + '…' : ing.name;
+              const nameText = ing.name.length > 24 ? ing.name.substring(0, 22) + '…' : ing.name;
               doc.text(nameText, colAlimento + 2, yPos);
               setColor(COLORS.textMuted);
-              doc.text(`${ing.quantity}g`, colCantidad, yPos);
-              doc.text(`${ing.calories || 0}`, colKcal, yPos);
-              doc.text(`${Math.round(ing.protein || 0)}`, colProt, yPos);
-              doc.text(`${Math.round(ing.carbs || 0)}`, colCarbs, yPos);
-              doc.text(`${Math.round(ing.fat || 0)}`, colFat, yPos);
+              doc.text(qtyText, colCantidad, yPos);
+              doc.text(`${Math.round(kcal)}`, colKcal, yPos);
+              doc.text(`${Math.round(prot)}`, colProt, yPos);
+              doc.text(`${Math.round(carb)}`, colCarbs, yPos);
+              doc.text(`${Math.round(fatv)}`, colFat, yPos);
 
-              totalKcal += (ing.calories || 0);
-              totalProt += (ing.protein || 0);
-              totalCarb += (ing.carbs || 0);
-              totalFatVal += (ing.fat || 0);
+              totalKcal += kcal;
+              totalProt += prot;
+              totalCarb += carb;
+              totalFatVal += fatv;
               yPos += 6;
             });
 
@@ -555,7 +569,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
             doc.setFontSize(8);
             setColor(COLORS.text);
             doc.text(t('consultation.pdf.total'), colAlimento + 2, yPos);
-            doc.text(`${totalKcal}`, colKcal, yPos);
+            doc.text(`${Math.round(totalKcal)}`, colKcal, yPos);
             doc.text(`${Math.round(totalProt)}`, colProt, yPos);
             doc.text(`${Math.round(totalCarb)}`, colCarbs, yPos);
             doc.text(`${Math.round(totalFatVal)}`, colFat, yPos);
@@ -599,7 +613,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
-        setColor(COLORS.primary);
+        setColor(COLORS.textMuted);
         doc.text(t('consultation.pdf.notes'), margin, yPos);
         yPos += 5;
 
@@ -628,12 +642,12 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
-        setColor(COLORS.primary);
+        setColor(COLORS.textMuted);
         doc.text(t('consultation.pdf.indicationsTitle'), margin, yPos);
         yPos += 5;
 
-        setFill(COLORS.primaryBg);
-        setDraw(COLORS.primaryLight);
+        setFill(COLORS.bgLight);
+        setDraw(COLORS.border);
         doc.setLineWidth(0.3);
         const indBoxH = indLines.length * 4.5 + 6;
         drawRoundedRect(margin, yPos, contentWidth, indBoxH, 2, 'FD');
@@ -728,8 +742,9 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
   return (
     <button
       onClick={generatePDF}
-      className="flex items-center justify-center gap-1.5 px-3 py-1 bg-gray-800 text-white rounded-sm text-[11px] hover:bg-gray-700 transition-colors"
+      className="flex items-center justify-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors disabled:opacity-60"
       disabled={loading}
+      title={t('consultation.pdf.btnPrint')}
     >
       <Printer size={13} />
       {loading ? t('consultation.pdf.btnGenerating') : t('consultation.pdf.btnPrint')}

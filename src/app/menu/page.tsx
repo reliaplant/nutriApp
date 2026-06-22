@@ -8,12 +8,13 @@ import { authService } from '@/app/shared/firebase';
 import { useAuth, hasAdminAccess } from '@/app/shared/AuthContext';
 import { useTranslation } from '@/app/shared/useTranslation';
 import LanguageSwitcher from '@/app/shared/LanguageSwitcher';
-import { Users, Calendar, UtensilsCrossed, Carrot, User, LogOut } from 'lucide-react';
+import { Users, Calendar, UtensilsCrossed, Carrot, User, LogOut, ClipboardList } from 'lucide-react';
 
 const navItemsBase = [
   { href: '/pacientes',     key: 'patients',      icon: <Users className="h-4 w-4" strokeWidth={1.75} />,           matchPaths: ['/pacientes', '/detalle-paciente', '/consulta', '/antropometria'] },
   { href: '/calendario',    key: 'calendar',      icon: <Calendar className="h-4 w-4" strokeWidth={1.75} />,        matchPaths: ['/calendario'] },
   { href: '/comidas',       key: 'meals',         icon: <UtensilsCrossed className="h-4 w-4" strokeWidth={1.75} />, matchPaths: ['/comidas'] },
+  { href: '/planes',        key: 'plans',         icon: <ClipboardList className="h-4 w-4" strokeWidth={1.75} />,   matchPaths: ['/planes'] },
   { href: '/ingredientes',  key: 'ingredients',   icon: <Carrot className="h-4 w-4" strokeWidth={1.75} />,          matchPaths: ['/ingredientes'] },
 ];
 

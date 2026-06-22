@@ -3,7 +3,7 @@ import { X, Search, BookOpen, Inbox, Plus, Clock } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db, authService } from '@/app/shared/firebase';
 import { MealOption } from './meals';
-import { categoryLabels, categoryIcons, MealCategory } from '@/app/comidas/constants';
+import { categoryLabels, categoryIcons, MealCategory, normalizeCategory } from '@/app/comidas/constants';
 import { useTranslation } from '@/app/shared/useTranslation';
 
 interface SavedMealOption {
@@ -78,14 +78,15 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: savedOptions.length };
     savedOptions.forEach(o => {
-      counts[o.category] = (counts[o.category] || 0) + 1;
+      const c = normalizeCategory(o.category);
+      counts[c] = (counts[c] || 0) + 1;
     });
     return counts;
   }, [savedOptions]);
 
   const filtered = useMemo(() => {
     return savedOptions.filter(o => {
-      const matchCat = selectedCategory === 'all' || o.category === selectedCategory;
+      const matchCat = selectedCategory === 'all' || normalizeCategory(o.category) === selectedCategory;
       const matchSearch = searchTerm.trim() === '' ||
         o.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         o.mealOption.ingredients?.some(ing => ing.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -105,7 +106,7 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
     return date.toLocaleDateString(lang === 'pt' ? 'pt-BR' : 'es', { day: '2-digit', month: 'short' });
   };
 
-  const sidebarCategories: ('all' | MealCategory)[] = ['all', 'desayuno', 'mediaManana', 'almuerzo', 'lunchTarde', 'cena', 'general'];
+  const sidebarCategories: ('all' | MealCategory)[] = ['all', 'desayuno', 'almuerzo', 'cena', 'snack'];
 
   return (
     <>
@@ -244,8 +245,8 @@ const LoadSavedMeal: React.FC<LoadSavedMealProps> = ({ onSelect }) => {
                             {/* Categoría chip */}
                             <div className="flex items-start justify-between mb-2 gap-2">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <img src={`/icons/${categoryIcons[opt.category]}.svg`} alt="" className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">{t(`meals.categories.${opt.category}`)}</span>
+                                <img src={`/icons/${categoryIcons[normalizeCategory(opt.category)]}.svg`} alt="" className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">{t(`meals.categories.${normalizeCategory(opt.category)}`)}</span>
                               </div>
                               <span className="flex items-center gap-0.5 text-[10px] text-gray-400 flex-shrink-0">
                                 <Clock className="w-2.5 h-2.5" />

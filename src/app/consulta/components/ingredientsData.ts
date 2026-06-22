@@ -1,178 +1,130 @@
 import type { Ingredient, IngredientPortion, IngredientPrep } from "./IngredientTypeahead";
-import unifiedDb from "@/app/shared/nutrition_db_unified.json";
+import bdd from "@/app/shared/bdd_nutricional.json";
 
-// Base de datos nutricional unificada — 7593 conceptos
-// Fuentes: TACO (Brasil), USDA (USA), BAM (México). Valores por 100g.
+// Base de datos nutricional propia — 562 alimentos curados.
+// Cada alimento trae nombres es/en/pt, keywords (sinónimos regionales),
+// nutrientes por estado (crudo/cocido/NA) con fuente, flags y derivados.
+// Valores por 100 g.
 
-type Per100g = {
-  energy_kcal?: number | null;
-  protein_g?: number | null;
-  total_fat_g?: number | null;
-  carbohydrate_g?: number | null;
+type Valores = {
+  kcal?: number | null;
+  prot?: number | null;
+  carb?: number | null;
+  grasa?: number | null;
   [k: string]: number | null | undefined;
 };
 
-type LangMap = { es?: string; en?: string; pt?: string };
-
-type RawPortion = {
-  label?: string | LangMap;
-  grams?: number | null;
+type EstadoBlock = {
+  valores?: Valores;
+  fuente?: string;
+  origen_dato?: string;
 };
 
-type RawPrep = {
-  label?: string | LangMap;
-  per_100g?: Per100g;
-  portions?: RawPortion[];
+type Medida = { label?: string | null; g?: number | null };
+
+type Alimento = {
+  id: string;
+  nombre?: string;
+  nombre_es?: string;
+  nombre_en?: string;
+  nombre_pt?: string;
+  keywords?: string[];
+  L1?: string;
+  L1_id?: string;
+  subgrupo?: string | null;
+  icono?: string;
+  nutrientes_100g?: Record<string, EstadoBlock>;
+  medidas?: Medida[] | null;
+  flags?: Record<string, unknown>;
+  derivados?: Record<string, unknown>;
+  indice_glucemico?: { valor?: number | null; categoria?: string; fuente?: string };
+  alergenos?: string[];
 };
 
-type UnifiedFood = {
-  name: string | LangMap;
-  category?: LangMap;
-  source?: string;
-  per_100g?: Per100g;
-  portions?: RawPortion[];
-  preparations?: Record<string, RawPrep>;
-  food_group?: string;
+type Bdd = { alimentos: Alimento[] };
+
+// Etiqueta legible del estado (crudo/cocido). NA no muestra etiqueta.
+const ESTADO_LABEL: Record<"es" | "pt", Record<string, string>> = {
+  es: { crudo: "cruda", cocido: "cocida" },
+  pt: { crudo: "crua", cocido: "cozida" },
 };
 
-type UnifiedDb = { foods: UnifiedFood[] };
+const pickNombre = (a: Alimento, lang: "es" | "pt"): string =>
+  (lang === "pt" ? a.nombre_pt : a.nombre_es) || a.nombre_es || a.nombre || a.nombre_en || "";
 
-// Mapeo food_group -> icono SVG existente en /public/icons/
-const ICON_BY_GROUP: Record<string, string> = {
-  beans: 'frijol', legumes: 'lenteja', soy: 'frijol',
-  root_veg: 'camote', wheat: 'harina', tropical: 'mango',
-  citrus: 'naranja', corn: 'elote', coffee_tea: 'generico',
-  chicken: 'pechuga_pollo', turkey: 'pechuga_pollo',
-  leafy_green: 'lechuga', chocolate: 'generico', cocoa_chocolate: 'generico',
-  candy: 'generico', tree_nut: 'nuez', sugar: 'azucar',
-  spice: 'condimento', condiment: 'condimento', condiments: 'condimento',
-  berry: 'fresa', squash: 'calabaza', stone_fruit: 'durazno',
-  apple: 'manzana', legume_veg: 'ejote', peanut: 'cacahuate',
-  pepper: 'pimiento', beef: 'carne_molida', veal: 'carne_molida',
-  lamb: 'carne_molida', game: 'carne_molida', organ_meat: 'carne_molida',
-  seed: 'semilla', rice: 'arroz',
-  alcohol: 'jugo', beverages: 'jugo', water: 'jugo', juice: 'jugo', soda: 'jugo',
-  onion_garlic: 'cebolla',
-  oil: 'aceite', lard: 'aceite', grasas_animales: 'aceite', butter: 'mantequilla',
-  pork: 'tocino', tomato: 'tomate', pasta: 'pasta', grape: 'uva',
-  cruciferous: 'brocoli', mushroom: 'hongo',
-  plant_milk: 'leche_vegetal', oats: 'grano',
-  fish: 'pescado', shellfish: 'camaron', cheese: 'queso',
-  baking: 'harina', supplement: 'generico', melon: 'melon',
-  milk: 'leche', cream: 'crema',
-  vegetables: 'verdura_generica', fruits: 'verdura_generica', seaweed: 'verdura_generica',
-  yogurt: 'yogur', egg: 'huevo',
-  other: 'generico', composite: 'generico',
-};
-
-// Etiquetas en ES/PT para claves de preparación (cuando label viene vacío).
-const PREP_LABELS: Record<'es' | 'pt', Record<string, string>> = {
-  es: {
-    raw: 'cruda', cooked: 'cocida', cooked_lean: 'cocida (magra)', cooked_regular: 'cocida (regular)',
-    grilled: 'a la plancha', pan_seared: 'al sartén', pan_fried: 'salteada',
-    pan_browned: 'dorada', pan_browned_no_oil: 'dorada sin aceite', pan_browned_with_oil: 'dorada con aceite',
-    roasted: 'asada', baked: 'horneada', broiled: 'a la parrilla',
-    boiled: 'hervida', braised: 'braseada', stewed: 'estofada',
-    fried: 'frita', fried_with_flour: 'frita empanizada', breaded: 'empanizada',
-    microwaved: 'al microondas', pickled: 'en escabeche', rendered: 'derretida',
-    ready_to_eat: 'lista para comer',
-    raw_fat: 'cruda con grasa', raw_lean: 'cruda magra', raw_semi_fat: 'cruda semi-grasa',
-    raw_fat_no_bone: 'cruda con grasa sin hueso', raw_fat_with_bone: 'cruda con grasa con hueso',
-    feet_cooked: 'patas cocidas', head_cooked: 'cabeza cocida',
-  },
-  pt: {
-    raw: 'crua', cooked: 'cozida', cooked_lean: 'cozida (magra)', cooked_regular: 'cozida (regular)',
-    grilled: 'grelhada', pan_seared: 'na frigideira', pan_fried: 'salteada',
-    pan_browned: 'dourada', pan_browned_no_oil: 'dourada sem óleo', pan_browned_with_oil: 'dourada com óleo',
-    roasted: 'assada', baked: 'no forno', broiled: 'na grelha',
-    boiled: 'cozida em água', braised: 'braseada', stewed: 'ensopada',
-    fried: 'frita', fried_with_flour: 'frita empanada', breaded: 'empanada',
-    microwaved: 'no microondas', pickled: 'em conserva', rendered: 'derretida',
-    ready_to_eat: 'pronta para consumo',
-    raw_fat: 'crua com gordura', raw_lean: 'crua magra', raw_semi_fat: 'crua semi-gorda',
-    raw_fat_no_bone: 'crua com gordura sem osso', raw_fat_with_bone: 'crua com gordura com osso',
-    feet_cooked: 'pés cozidos', head_cooked: 'cabeça cozida',
-  },
-};
-
-const iconFor = (group?: string): string => (group && ICON_BY_GROUP[group]) || 'generico';
-
-const pickName = (n: string | LangMap | undefined, lang: 'es' | 'pt'): string => {
-  if (!n) return '';
-  if (typeof n === 'string') return n;
-  return n[lang] || n.es || n.pt || n.en || '';
-};
-
-const mapPortions = (
-  raw: RawPortion[] | undefined,
-  lang: 'es' | 'pt'
-): IngredientPortion[] => {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((p) => typeof p?.grams === 'number' && (p.grams as number) > 0)
-    .map((p) => ({ label: pickName(p.label, lang) || `${p.grams} g`, grams: p.grams as number }));
-};
-
-const macrosFromPer100g = (p: Per100g) => ({
-  calories: p.energy_kcal ?? 0,
-  protein: p.protein_g ?? 0,
-  carbs: p.carbohydrate_g ?? 0,
-  fat: p.total_fat_g ?? 0,
+const macros = (v: Valores | undefined) => ({
+  calories: v?.kcal ?? 0,
+  protein: v?.prot ?? 0,
+  carbs: v?.carb ?? 0,
+  fat: v?.grasa ?? 0,
 });
 
-const buildPrep = (
-  key: string,
-  prep: RawPrep,
-  lang: 'es' | 'pt'
-): IngredientPrep | null => {
-  if (!prep?.per_100g) return null;
-  const explicit = pickName(prep.label, lang);
-  const fallback = PREP_LABELS[lang][key] || key.replace(/_/g, ' ');
-  return {
-    key,
-    label: explicit || fallback,
-    ...macrosFromPer100g(prep.per_100g),
-    portions: mapPortions(prep.portions, lang),
-  };
+const mapMedidas = (raw: Medida[] | null | undefined): IngredientPortion[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((m) => typeof m?.g === "number" && (m.g as number) > 0)
+    .map((m) => ({ label: m.label || `${m.g} g`, grams: m.g as number }));
 };
 
-const expandFood = (row: UnifiedFood, lang: 'es' | 'pt'): Ingredient | null => {
-  const baseName = pickName(row.name, lang);
-  if (!baseName) return null;
-  const icon = iconFor(row.food_group);
+// Orden de estados para elegir el representativo (default).
+const ORDEN_ESTADOS = ["crudo", "cocido", "NA"];
 
-  // Solo conceptos curados: deben tener `preparations`.
-  // Las entradas planas (BAM_Mexico/TACO/USDA crudas) se ignoran por ahora —
-  // son nombres en MAYÚSCULAS sin preparaciones ni concept_id.
-  if (!row.preparations) return null;
+const expandAlimento = (a: Alimento, lang: "es" | "pt"): Ingredient | null => {
+  const name = pickNombre(a, lang);
+  if (!name) return null;
+  const nut = a.nutrientes_100g || {};
+  const portions = mapMedidas(a.medidas);
 
-  const preps: IngredientPrep[] = [];
-  for (const [key, prep] of Object.entries(row.preparations)) {
-    if (/^\d+$/.test(key)) continue; // claves numéricas son anomalías
-    const built = buildPrep(key, prep, lang);
-    if (built) preps.push(built);
-  }
-  if (preps.length === 0) return null;
-  // Macros por defecto = primera preparación (suele ser "raw" / "cocida")
-  const first = preps[0];
+  // Construir preparaciones a partir de los estados crudo/cocido.
+  // NA (alimento sin distinción) NO genera selector de preparación.
+  const estados = ORDEN_ESTADOS.filter(
+    (e) => nut[e] && (nut[e].valores?.kcal ?? null) !== null
+  );
+  if (estados.length === 0) return null;
+
+  const reales = estados.filter((e) => e === "crudo" || e === "cocido");
+  const preparations: IngredientPrep[] = reales.map((e) => ({
+    key: e,
+    label: ESTADO_LABEL[lang][e] || e,
+    ...macros(nut[e].valores),
+    portions,
+  }));
+
+  // Estado representativo para los macros por defecto.
+  const repKey = estados[0];
+  const rep = macros(nut[repKey].valores);
+
+  const der = (a.derivados || {}) as Record<string, unknown>;
+  const ig = a.indice_glucemico;
+
   return {
-    name: baseName,
+    name,
     quantity: 100,
-    calories: first.calories,
-    protein: first.protein,
-    carbs: first.carbs,
-    fat: first.fat,
-    icon,
-    portions: first.portions,
-    preparations: preps,
+    ...rep,
+    icon: a.icono || "generico",
+    portions,
+    preparations: preparations.length > 1 ? preparations : undefined,
+    // Keywords = sinónimos + grupo (L1) + subgrupo (L2) → permite buscar por grupo.
+    keywords: [...(a.keywords || []), a.L1, a.subgrupo]
+      .filter((s): s is string => typeof s === "string" && s.length > 0)
+      .map((s) => s.toLowerCase()),
+    // Grupo (L1) y subgrupo (L2) para la biblioteca navegable.
+    grupo: typeof a.L1 === "string" ? a.L1 : undefined,
+    subgrupo: typeof a.subgrupo === "string" ? a.subgrupo : undefined,
+    // Metadatos para filtros del buscador (no se guardan al seleccionar).
+    grupoIntercambio: typeof der.grupo_intercambio === "string" ? der.grupo_intercambio : undefined,
+    macroDominante: typeof der.macro_dominante === "string" ? der.macro_dominante : undefined,
+    ig: ig ? { valor: ig.valor ?? null, categoria: ig.categoria || "" } : undefined,
+    flags: (a.flags as Record<string, boolean>) || undefined,
+    alergenos: a.alergenos,
   };
 };
 
-const DB = (unifiedDb as UnifiedDb).foods;
+const DB = (bdd as unknown as Bdd).alimentos;
 
 export function getCommonIngredients(lang: "es" | "pt" = "es"): Ingredient[] {
   return DB
-    .map((r) => expandFood(r, lang))
+    .map((a) => expandAlimento(a, lang))
     .filter((x): x is Ingredient => x !== null)
     .sort((a, b) => a.name.localeCompare(b.name, lang === "pt" ? "pt-BR" : "es"));
 }

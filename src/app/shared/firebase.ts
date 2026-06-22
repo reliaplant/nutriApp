@@ -14,7 +14,8 @@ import {
   Timestamp,
   orderBy,
   setDoc,
-  increment
+  increment,
+  writeBatch
 } from "firebase/firestore";
 import { getStorage } from 'firebase/storage';
 import { 
@@ -120,8 +121,27 @@ export interface NutritionUser {
   patientLoad?: '0' | '1-10' | '11-30' | '30+';
   specialties?: string[];
   onboardingCompletedAt?: Timestamp | null;
+  planTags?: string[];          // biblioteca de etiquetas para planes (reutilizables)
   createdAt: Timestamp;
 }
+
+// Etiquetas de planes disponibles por defecto para cada nutriólogo.
+export const DEFAULT_PLAN_TAGS: string[] = [
+  'Pérdida de peso',
+  'Mantenimiento',
+  'Ganancia muscular',
+  'Vegetariano',
+  'Vegano',
+  'Sin gluten',
+  'Sin lactosa',
+  'Diabetes',
+  'Hipertensión',
+  'Colesterol alto',
+  'Keto',
+  'Ayuno intermitente',
+  'Deportistas',
+  'Embarazo',
+];
 
 // Interfaz para comidas guardadas
 export interface SavedMeal {
@@ -706,6 +726,12 @@ export const consultationService = {
         }
       }
     }
+  },
+
+  // Reabrir una consulta completada (volver a "en progreso")
+  async reopenConsultation(patientId: string, consultationId: string): Promise<void> {
+    const consultationRef = doc(db, `patientConsultas/${patientId}/consultas/${consultationId}`);
+    await updateDoc(consultationRef, { status: 'scheduled' });
   }
 };
 
@@ -1257,7 +1283,7 @@ export const adminService = {
   // Lista todos los usuarios (nutricionistas + admins)
   async getAllUsers(): Promise<NutritionUser[]> {
     const snap = await getDocs(collection(db, 'users'));
-    return snap.docs.map((d) => ({ uid: d.id, ...(d.data() as NutritionUser) }));
+    return snap.docs.map((d) => ({ ...(d.data() as NutritionUser), uid: d.id }));
   },
 
   // Cuenta los pacientes de un nutricionista
@@ -1298,3 +1324,125 @@ export const adminService = {
 
 // // Export the Patient interface if needed
 // export type { Patient };
+
+// ─── Planes reutilizables (plantillas de plan completo) ───────────────────────
+// Cada plan guarda todo el conjunto de comidas (meals[]) + metadatos.
+// Vive en users/{uid}/savedPlans.
+export interface SavedPlan {
+  id?: string;
+  name: string;
+  group?: string;            // [legacy] grupo único — reemplazado por tags
+  tags?: string[];           // etiquetas libres reutilizables (0..n)
+  featured?: boolean;        // marcado como destacado por el nutriólogo
+  meals: unknown[];          // Meal[] embebido (autocontenido)
+  indicaciones?: string;     // indicaciones generales (opcional)
+  totalNutrition?: { calories: number; protein: number; carbs: number; fat: number };
+  targetCalories?: number;
+  mealsCount?: number;
+  usageCount?: number;
+  createdAt?: unknown;
+  lastUsedDate?: unknown;
+}
+
+export const planService = {
+  async getPlans(): Promise<SavedPlan[]> {
+    const user = authService.getCurrentUser();
+    if (!user) return [];
+    const q = query(collection(db, `users/${user.uid}/savedPlans`), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedPlan));
+  },
+
+  async createPlan(plan: Omit<SavedPlan, 'id'>): Promise<string> {
+    const user = authService.getCurrentUser();
+    if (!user) throw new Error('Debes iniciar sesión');
+    const clean = JSON.parse(JSON.stringify(plan)); // Firestore no acepta undefined
+    const ref = await addDoc(collection(db, `users/${user.uid}/savedPlans`), {
+      ...clean,
+      usageCount: 0,
+      createdAt: serverTimestamp(),
+      lastUsedDate: serverTimestamp(),
+    });
+    return ref.id;
+  },
+
+  async updatePlan(id: string, data: Partial<SavedPlan>): Promise<void> {
+    const user = authService.getCurrentUser();
+    if (!user) throw new Error('Debes iniciar sesión');
+    const clean = JSON.parse(JSON.stringify(data));
+    await updateDoc(doc(db, `users/${user.uid}/savedPlans`, id), clean);
+  },
+
+  async deletePlan(id: string): Promise<void> {
+    const user = authService.getCurrentUser();
+    if (!user) throw new Error('Debes iniciar sesión');
+    await deleteDoc(doc(db, `users/${user.uid}/savedPlans`, id));
+  },
+
+  // ── Biblioteca de etiquetas (reutilizables, por nutriólogo) ──
+  async getTagLibrary(): Promise<string[]> {
+    const user = authService.getCurrentUser();
+    if (!user) return [...DEFAULT_PLAN_TAGS];
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    const data = snap.exists() ? (snap.data() as NutritionUser) : null;
+    if (data && Array.isArray(data.planTags)) {
+      // Unimos con los defaults para que nuevas etiquetas base aparezcan en cuentas previas.
+      return [...new Set([...DEFAULT_PLAN_TAGS, ...data.planTags])];
+    }
+    // Primer uso: sembramos las etiquetas por defecto en el perfil.
+    await updateDoc(doc(db, 'users', user.uid), { planTags: DEFAULT_PLAN_TAGS }).catch(() => {});
+    return [...DEFAULT_PLAN_TAGS];
+  },
+
+  async saveTagLibrary(tags: string[]): Promise<void> {
+    const user = authService.getCurrentUser();
+    if (!user) throw new Error('Debes iniciar sesión');
+    await updateDoc(doc(db, 'users', user.uid), { planTags: tags });
+  },
+
+  // Renombra una etiqueta en la biblioteca y en todos los planes que la usan.
+  async renameTag(oldTag: string, newTag: string): Promise<void> {
+    const user = authService.getCurrentUser();
+    if (!user) throw new Error('Debes iniciar sesión');
+    const from = oldTag.trim();
+    const to = newTag.trim().replace(/\s+/g, ' ');
+    if (!from || !to || from.toLowerCase() === to.toLowerCase()) return;
+    // Biblioteca
+    const lib = await this.getTagLibrary();
+    await this.saveTagLibrary([...new Set(lib.map(t => (t.toLowerCase() === from.toLowerCase() ? to : t)))]);
+    // Planes (cascada)
+    const plans = await this.getPlans();
+    const batch = writeBatch(db);
+    let touched = 0;
+    plans.forEach(p => {
+      const tags = Array.isArray(p.tags) ? p.tags : (p.group ? [p.group] : []);
+      if (tags.some(t => t.toLowerCase() === from.toLowerCase())) {
+        const newTags = [...new Set(tags.map(t => (t.toLowerCase() === from.toLowerCase() ? to : t)))];
+        batch.update(doc(db, `users/${user.uid}/savedPlans`, p.id!), { tags: newTags });
+        touched++;
+      }
+    });
+    if (touched) await batch.commit();
+  },
+
+  // Elimina una etiqueta de la biblioteca y de todos los planes que la usan.
+  async deleteTag(tag: string): Promise<void> {
+    const user = authService.getCurrentUser();
+    if (!user) throw new Error('Debes iniciar sesión');
+    const t = tag.trim();
+    if (!t) return;
+    const lib = await this.getTagLibrary();
+    await this.saveTagLibrary(lib.filter(x => x.toLowerCase() !== t.toLowerCase()));
+    const plans = await this.getPlans();
+    const batch = writeBatch(db);
+    let touched = 0;
+    plans.forEach(p => {
+      const tags = Array.isArray(p.tags) ? p.tags : (p.group ? [p.group] : []);
+      if (tags.some(x => x.toLowerCase() === t.toLowerCase())) {
+        batch.update(doc(db, `users/${user.uid}/savedPlans`, p.id!), { tags: tags.filter(x => x.toLowerCase() !== t.toLowerCase()) });
+        touched++;
+      }
+    });
+    if (touched) await batch.commit();
+  },
+};

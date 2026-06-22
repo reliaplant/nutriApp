@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import MealOptionEditor, { MealOptionValue } from '@/app/consulta/components/MealOptionEditor';
 import { getCommonIngredients } from '@/app/consulta/components/ingredientsData';
-import { categoryIcons, MealCategory } from './constants';
+import { categoryIcons, MealCategory, normalizeCategory } from './constants';
 import { SavedMeal } from '@/app/shared/interfaces';
 import { useTranslation } from '@/app/shared/useTranslation';
 
@@ -25,7 +25,7 @@ type ViewMode = 'kanban' | 'table';
 type MacroFilter = 'all' | 'highProtein' | 'highCarb' | 'highFat';
 
 const ALL_CATEGORIES: MealCategory[] =
-  ['desayuno', 'mediaManana', 'almuerzo', 'lunchTarde', 'cena', 'general'];
+  ['desayuno', 'almuerzo', 'cena', 'snack'];
 
 // % macros (a partir de gramos × 4/4/9 cal)
 const macroPercents = (meal: SavedMeal) => {
@@ -45,7 +45,8 @@ export default function SavedMealsPage() {
   const [error, setError] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [macroFilter, setMacroFilter] = useState<MacroFilter>('all');
+  const [macroFilter] = useState<MacroFilter>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'refeit' | 'propio'>('all');
   const [sortBy, setSortBy] = useState<string>('lastUsed');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = usePersistedView<ViewMode>('nutri.view.comidas', 'kanban');
@@ -129,6 +130,8 @@ export default function SavedMealsPage() {
   const processedMeals = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     let arr = savedMeals.filter(meal => {
+      // Origen: por ahora todas las guardadas son "propias"; Refeit aún no existe.
+      if (sourceFilter === 'refeit') return false;
       const matchesSearch = !term || (
         meal.name?.toLowerCase().includes(term) ||
         meal.mealOption?.content?.toLowerCase().includes(term) ||
@@ -154,16 +157,15 @@ export default function SavedMealsPage() {
       }
     });
     return arr;
-  }, [savedMeals, searchTerm, macroFilter, sortBy, sortDirection]);
+  }, [savedMeals, searchTerm, macroFilter, sourceFilter, sortBy, sortDirection]);
 
   // Agrupar por categoría para kanban
   const mealsByCategory = useMemo(() => {
     const map: Record<MealCategory, SavedMeal[]> = {
-      desayuno: [], mediaManana: [], almuerzo: [], lunchTarde: [], cena: [], general: []
+      desayuno: [], almuerzo: [], cena: [], snack: []
     };
     processedMeals.forEach(m => {
-      const cat = (ALL_CATEGORIES.includes(m.category as MealCategory) ? m.category : 'general') as MealCategory;
-      map[cat].push(m);
+      map[normalizeCategory(m.category)].push(m);
     });
     return map;
   }, [processedMeals]);
@@ -179,11 +181,16 @@ export default function SavedMealsPage() {
     setMealToEdit(meal);
     setEditorDraft({
       name: meal.name || '',
-      category: (meal.category as MealCategory) || 'general',
+      category: normalizeCategory(meal.category),
       option: {
         name: meal.mealOption?.name || meal.name || '',
         content: meal.mealOption?.content || '',
-        ingredients: meal.mealOption?.ingredients || [],
+        ingredients: (meal.mealOption?.ingredients || []).map(ing => ({
+          ...ing,
+          protein: ing.protein ?? 0,
+          carbs: ing.carbs ?? 0,
+          fat: ing.fat ?? 0,
+        })),
         instructions: meal.mealOption?.instructions || '',
       },
       imageUrl: meal.imageUrl || null,
@@ -196,7 +203,7 @@ export default function SavedMealsPage() {
   const handleCreate = (preselectCategory?: MealCategory) => {
     setEditorDraft({
       name: '',
-      category: preselectCategory || 'general',
+      category: preselectCategory || 'snack',
       option: { name: '', content: '', ingredients: [], instructions: '' },
       imageUrl: null,
       imageFile: null,
@@ -271,13 +278,13 @@ export default function SavedMealsPage() {
         name: editorDraft.name || editorDraft.option.name || t('meals.noName'),
         category: editorDraft.category,
         imageUrl: finalImageUrl,
-        mealOption: {
+        mealOption: JSON.parse(JSON.stringify({
           name: editorDraft.option.name || '',
           content: editorDraft.option.content || '',
           instructions: editorDraft.option.instructions || '',
           ingredients: editorDraft.option.ingredients || [],
           isSelectedForSummary: true,
-        },
+        })),
         totalNutrition,
       };
 
@@ -350,7 +357,7 @@ export default function SavedMealsPage() {
         </span>
 
         <button
-          onClick={handleCreate}
+          onClick={() => handleCreate()}
           className="ml-2 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition-colors"
         >
           <PlusCircle className="w-3.5 h-3.5" />
@@ -369,51 +376,26 @@ export default function SavedMealsPage() {
           />
         </div>
 
-        {/* Filtros macro */}
-        <div className="flex items-center gap-1">
+        {/* Toggle de origen */}
+        <div className="flex items-center rounded p-0.5" style={{ backgroundColor: '#F0EDE8', border: '1px solid #E8E5DE' }}>
           {([
-            { key: 'all',         label: t('meals.filters.all'),         iconSvg: 'generico' },
-            { key: 'highProtein', label: t('meals.filters.highProtein'),  iconSvg: 'bistec'   },
-            { key: 'highCarb',    label: t('meals.filters.highCarb'),     iconSvg: 'arroz'    },
-            { key: 'highFat',     label: t('meals.filters.highFat'),      iconSvg: 'aceite'   },
-          ] as { key: MacroFilter; label: string; iconSvg: string }[]).map(({ key, label, iconSvg }) => (
+            { key: 'all', label: t('meals.source.all') },
+            { key: 'refeit', label: t('meals.source.refeit') },
+            { key: 'propio', label: t('meals.source.custom') },
+          ] as { key: 'all' | 'refeit' | 'propio'; label: string }[]).map(tab => (
             <button
-              key={key}
-              onClick={() => setMacroFilter(key)}
-              className={`px-2 py-1 text-[11px] rounded transition-colors flex items-center gap-1.5 ${
-                macroFilter === key
-                  ? 'text-gray-900 font-medium bg-white border border-gray-200'
-                  : 'text-gray-500 hover:text-gray-700'
+              key={tab.key}
+              onClick={() => setSourceFilter(tab.key)}
+              className={`px-2.5 py-1 text-[11px] rounded transition-colors ${
+                sourceFilter === tab.key ? 'bg-white text-gray-800 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <img src={`/icons/${iconSvg}.svg`} alt="" className="w-4 h-4" />
-              {label}
+              {tab.label}
             </button>
           ))}
         </div>
 
         <div className="ml-auto flex items-center gap-3">
-          {/* Sort */}
-          <div className="flex items-center gap-0.5">
-            <span className="text-[10px] uppercase tracking-wider text-gray-400 mr-1.5 font-semibold">{t('meals.sort')}</span>
-            {sortOptions.map(o => (
-              <button
-                key={o.key}
-                onClick={() => handleSort(o.key)}
-                className={`px-1.5 py-1 text-[11px] rounded transition-colors ${
-                  sortBy === o.key ? 'text-gray-900 font-medium bg-white border border-gray-200' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {o.label}
-                {sortBy === o.key && (
-                  sortDirection === 'desc'
-                    ? <ArrowDown className="w-2.5 h-2.5 inline-block ml-0.5" />
-                    : <ArrowUp className="w-2.5 h-2.5 inline-block ml-0.5" />
-                )}
-              </button>
-            ))}
-          </div>
-
           {/* Toggle vista */}
           <div className="flex items-center rounded p-0.5" style={{ backgroundColor: '#F0EDE8', border: '1px solid #E8E5DE' }}>
             <button
@@ -557,7 +539,7 @@ const KanbanBoard: React.FC<{
       return (
         <div
           key={cat}
-          className="flex-shrink-0 w-72 rounded-md flex flex-col h-full"
+          className="flex-1 min-w-[240px] rounded-md flex flex-col h-full"
           style={{ backgroundColor: '#F4F2EE', border: '1px solid #E8E5DE' }}
         >
           {/* Header columna — sobrio */}
@@ -719,12 +701,12 @@ const MealsTable: React.FC<{
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-1.5">
                     <img
-                      src={`/icons/${categoryIcons[meal.category as MealCategory] || 'plato'}.svg`}
+                      src={`/icons/${categoryIcons[normalizeCategory(meal.category)]}.svg`}
                       alt=""
                       className="w-3.5 h-3.5"
                     />
                     <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
-                      {t(`meals.categories.${(meal.category as MealCategory) || 'general'}`)}
+                      {t(`meals.categories.${normalizeCategory(meal.category)}`)}
                     </span>
                   </div>
                 </td>

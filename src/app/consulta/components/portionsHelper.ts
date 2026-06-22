@@ -217,6 +217,29 @@ export function getPortionsForIngredient(
   return FALLBACK_PORTIONS[inferCategory(ingredient)];
 }
 
+/** Parsea una porción "N unidad" → unidad singular + gramos por unidad.
+ *  Ej: "3 rebanadas" (84g) → { label: "rebanadas", perUnit: 28, count: 3 }
+ *      "1 taza" (240g)     → { label: "taza", perUnit: 240, count: 1 }
+ *      "1/2 taza" (120g)   → { label: "taza", perUnit: 240, count: 0.5 }
+ */
+export function parsePortion(p: Portion): { label: string; perUnit: number; count: number } {
+  const m = p.label.match(/^\s*(\d+\/\d+|\d+(?:[.,]\d+)?)\s+(.+)$/);
+  if (m) {
+    const raw = m[1];
+    const count = raw.includes('/')
+      ? Number(raw.split('/')[0]) / Number(raw.split('/')[1])
+      : Number(raw.replace(',', '.'));
+    if (count > 0) return { label: m[2], perUnit: p.gramos / count, count };
+  }
+  return { label: p.label, perUnit: p.gramos, count: 1 };
+}
+
+/** Elige la porción "más razonable" para usar por defecto (20–250 g, distinta de 100). */
+export function pickReasonablePortion(portions: Portion[]): Portion | null {
+  if (!portions || portions.length === 0) return null;
+  return portions.find((p) => p.gramos >= 20 && p.gramos <= 250 && p.gramos !== 100) || portions[0];
+}
+
 /** Devuelve los gramos por defecto al añadir el ingrediente por primera vez. */
 export function getDefaultGramsForIngredient(
   ingredient: Pick<Ingredient, 'name' | 'icon' | 'portions'>
