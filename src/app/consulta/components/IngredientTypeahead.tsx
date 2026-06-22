@@ -41,6 +41,8 @@ export interface Ingredient {
   keywords?: string[];
   /** Grupo (L1) y subgrupo (L2) para la biblioteca navegable. */
   grupo?: string;
+  /** Etiqueta de grupo (L1) ya traducida al idioma activo (para mostrar). */
+  grupoLabel?: string;
   subgrupo?: string;
   /** Metadatos para filtros del buscador (no se guardan al seleccionar). */
   grupoIntercambio?: string;
@@ -109,9 +111,9 @@ const IngredientTypeahead = ({
   const [libQuery, setLibQuery] = useState('');
   const [libGroup, setLibGroup] = useState('');
   // Chip de grupo sugerido + grupo activo (explorando un grupo desde el typeahead).
-  type GroupChip = { kind: 'sub' | 'l1'; value: string; l1: string; icono?: string };
+  type GroupChip = { kind: 'sub' | 'l1'; value: string; label: string; l1: string; icono?: string };
   const [groupChips, setGroupChips] = useState<GroupChip[]>([]);
-  const [activeGroup, setActiveGroup] = useState<{ kind: 'sub' | 'l1'; value: string; l1: string; icono?: string } | null>(null);
+  const [activeGroup, setActiveGroup] = useState<{ kind: 'sub' | 'l1'; value: string; label: string; l1: string; icono?: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 320 });
@@ -186,6 +188,7 @@ const IngredientTypeahead = ({
       const subToL1: Record<string, string> = {};
       const subIcon: Record<string, string> = {};
       const l1Icon: Record<string, string> = {};
+      const l1Label: Record<string, string> = {};
       for (const { ing } of scored) {
         if (ing.subgrupo) {
           subC[ing.subgrupo] = (subC[ing.subgrupo] || 0) + 1;
@@ -195,14 +198,16 @@ const IngredientTypeahead = ({
         if (ing.grupo) {
           l1C[ing.grupo] = (l1C[ing.grupo] || 0) + 1;
           if (!l1Icon[ing.grupo] && ing.icon) l1Icon[ing.grupo] = ing.icon;
+          if (!l1Label[ing.grupo]) l1Label[ing.grupo] = ing.grupoLabel || ing.grupo;
         }
       }
       const chips: GroupChip[] = [];
+      // Subgrupos (L2) no tienen traducción: se muestran tal cual.
       Object.entries(subC).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 3)
-        .forEach(([value]) => chips.push({ kind: 'sub', value, l1: subToL1[value] || '', icono: subIcon[value] }));
+        .forEach(([value]) => chips.push({ kind: 'sub', value, label: value, l1: subToL1[value] || '', icono: subIcon[value] }));
       Object.entries(l1C).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 2)
         .forEach(([value]) => {
-          if (!chips.some((ch) => ch.value.toLowerCase() === value.toLowerCase())) chips.push({ kind: 'l1', value, l1: value, icono: l1Icon[value] });
+          if (!chips.some((ch) => ch.value.toLowerCase() === value.toLowerCase())) chips.push({ kind: 'l1', value, label: l1Label[value] || value, l1: value, icono: l1Icon[value] });
         });
       setGroupChips(chips.slice(0, 4));
     } else {
@@ -350,7 +355,7 @@ const IngredientTypeahead = ({
                   {activeGroup.icono
                     ? <img src={`/icons/${activeGroup.icono}.svg`} alt="" className="w-4 h-4 rounded-full bg-white/80 p-px" />
                     : <Layers className="w-3 h-3" />}
-                  {activeGroup.value}
+                  {activeGroup.label}
                   <X className="w-3 h-3" />
                 </button>
               );
@@ -361,14 +366,14 @@ const IngredientTypeahead = ({
                   <button
                     key={`${ch.kind}:${ch.value}`}
                     type="button"
-                    onClick={() => setActiveGroup({ kind: ch.kind, value: ch.value, l1: ch.l1, icono: ch.icono })}
+                    onClick={() => setActiveGroup({ kind: ch.kind, value: ch.value, label: ch.label, l1: ch.l1, icono: ch.icono })}
                     className="inline-flex items-center gap-1.5 text-[10px] pl-1 pr-2 py-0.5 rounded-full font-medium transition-all hover:shadow-sm"
                     style={{ border: `1px solid ${c.border}`, backgroundImage: `linear-gradient(135deg, #FFFFFF, ${c.bg})`, color: c.text }}
                   >
                     {ch.icono
                       ? <img src={`/icons/${ch.icono}.svg`} alt="" className="w-4 h-4" />
                       : <Layers className="w-3 h-3" />}
-                    {ch.value}
+                    {ch.label}
                   </button>
                 );
               })
@@ -432,7 +437,12 @@ const IngredientTypeahead = ({
     });
 
     const counts: Record<string, number> = {};
-    for (const ing of base) { const g = ing.grupo || 'Otros'; counts[g] = (counts[g] || 0) + 1; }
+    const groupLabelMap: Record<string, string> = {};
+    for (const ing of base) {
+      const g = ing.grupo || 'Otros';
+      counts[g] = (counts[g] || 0) + 1;
+      if (!groupLabelMap[g]) groupLabelMap[g] = ing.grupoLabel || g;
+    }
     const groupNames = Object.keys(counts).sort((a, b) => {
       const ia = GROUP_ORDER.indexOf(a); const ib = GROUP_ORDER.indexOf(b);
       return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
@@ -521,7 +531,7 @@ const IngredientTypeahead = ({
           <div className="flex flex-1 min-h-0">
             <div className="w-48 flex-shrink-0 overflow-auto py-2 px-2 space-y-0.5" style={{ borderRight: '1px solid #F0EDE8' }}>
               {railItem('Todos', base.length, '')}
-              {groupNames.map((gn) => railItem(gn, counts[gn], gn))}
+              {groupNames.map((gn) => railItem(groupLabelMap[gn] || gn, counts[gn], gn))}
             </div>
 
             <div className="flex-1 min-w-0 overflow-auto">

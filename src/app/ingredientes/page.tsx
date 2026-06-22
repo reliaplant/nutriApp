@@ -8,7 +8,7 @@ import { Search, Trash2, PlusCircle, AlertCircle, X, Sparkles } from 'lucide-rea
 import { db, authService } from '@/app/shared/firebase';
 import { useAuth } from '@/app/shared/AuthContext';
 import { inferCategory } from '@/app/consulta/components/portionsHelper';
-import { getCommonIngredients } from '@/app/consulta/components/ingredientsData';
+import { getCommonIngredients, groupLabel } from '@/app/consulta/components/ingredientsData';
 import { useTranslation } from '@/app/shared/useTranslation';
 
 type Source = 'refeit' | 'propio';
@@ -75,7 +75,7 @@ const kcalFromMacros = (i: { protein: number; carbs: number; fat: number }) =>
   Math.round((Number(i.protein) || 0) * 4 + (Number(i.carbs) || 0) * 4 + (Number(i.fat) || 0) * 9);
 
 export default function IngredientsPage() {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [propios, setPropios] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -100,9 +100,9 @@ export default function IngredientsPage() {
     { key: 'fat', label: t('meals.filters.highFat'), test: (i: Ingredient) => i.calories > 0 && (i.fat * 9) / i.calories >= 0.5 },
   ]), [t]);
 
-  // ── Base Refeit (562 de la BDD curada) ──
+  // ── Base Refeit (562 de la BDD curada) — nombres en el idioma de la app ──
   const refeit = useMemo<Ingredient[]>(() => {
-    return getCommonIngredients('es').map((a) => ({
+    return getCommonIngredients(lang).map((a) => ({
       name: a.name,
       quantity: 100,
       calories: Number(a.calories) || 0,
@@ -113,7 +113,7 @@ export default function IngredientsPage() {
       grupo: a.grupo,
       source: 'refeit' as const,
     }));
-  }, []);
+  }, [lang]);
 
   // ── Carga de propios (Firestore) ──
   useEffect(() => {
@@ -307,7 +307,7 @@ export default function IngredientsPage() {
           <div className="w-72 flex-shrink-0 overflow-y-auto py-2 px-2 space-y-0.5" style={{ borderRight: '1px solid #F0EDE8', backgroundColor: '#FAF9F7' }}>
             <RailItem label={t('ingredients.allGroups')} icon="" count={base.length} active={activeGroup === null} onClick={() => setActiveGroup(null)} />
             {visibleGroups.map(g => (
-              <RailItem key={g.key} label={g.key} icon={g.icon} count={counts[g.key]} active={activeGroup === g.key} onClick={() => setActiveGroup(g.key)} />
+              <RailItem key={g.key} label={groupLabel(g.key, lang)} icon={g.icon} count={counts[g.key]} active={activeGroup === g.key} onClick={() => setActiveGroup(g.key)} />
             ))}
           </div>
 
@@ -361,6 +361,7 @@ export default function IngredientsPage() {
           editing={editingName !== null}
           error={draftError}
           groups={L1_GROUPS}
+          lang={lang}
           onClose={closeEditor}
           onSave={saveDraft}
           onDelete={editingName !== null ? () => { setDeleteName(editingName); closeEditor(); } : undefined}
@@ -421,11 +422,12 @@ const IngredientEditor: React.FC<{
   editing: boolean;
   error: string;
   groups: { key: string; label: string; icon: string }[];
+  lang: 'es' | 'pt';
   onClose: () => void;
   onSave: () => void;
   onDelete?: () => void;
   t: (key: string) => string;
-}> = ({ draft, setDraft, editing, error, groups, onClose, onSave, onDelete, t }) => {
+}> = ({ draft, setDraft, editing, error, groups, lang, onClose, onSave, onDelete, t }) => {
   const num = (v: string) => (v === '' ? 0 : Math.max(0, +v));
   const kp = (draft.protein || 0) * 4, kc = (draft.carbs || 0) * 4, kf = (draft.fat || 0) * 9;
   const kt = kp + kc + kf || 1;
@@ -470,7 +472,7 @@ const IngredientEditor: React.FC<{
                 onChange={(e) => setDraft({ ...draft, grupo: e.target.value })}
                 className="w-full h-9 px-2 text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white border border-[#E0DCD4] text-gray-800"
               >
-                {groups.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+                {groups.map(g => <option key={g.key} value={g.key}>{groupLabel(g.key, lang)}</option>)}
               </select>
             </div>
           </div>

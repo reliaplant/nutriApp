@@ -27,6 +27,10 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
+  deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   User,
   UserCredential,
   browserLocalPersistence,
@@ -115,6 +119,7 @@ export interface NutritionUser {
   signatureUrl?: string;        // para firma real
   textSignature?: string;       // para firma generada
   useRealSignature?: boolean;   // toggle de firma real o generada
+  signatureFont?: string;       // fuente de la firma digital (font-family)
   // Onboarding
   country?: string;
   practiceType?: ('clinic' | 'private' | 'online')[];
@@ -142,6 +147,14 @@ export const DEFAULT_PLAN_TAGS: string[] = [
   'Deportistas',
   'Embarazo',
 ];
+
+// Fuentes disponibles para la firma digital (el id ES el font-family CSS).
+export const SIGNATURE_FONTS: { id: string; label: string }[] = [
+  { id: 'Allura', label: 'Allura' },
+  { id: 'Great Vibes', label: 'Great Vibes' },
+  { id: 'Dancing Script', label: 'Dancing Script' },
+];
+export const DEFAULT_SIGNATURE_FONT = 'Allura';
 
 // Interfaz para comidas guardadas
 export interface SavedMeal {
@@ -267,7 +280,57 @@ export const authService = {
   // Current user
   getCurrentUser(): User | null {
     return auth.currentUser;
-  }
+  },
+
+  // Identificador del proveedor de autenticación (password / google.com / …)
+  getAuthProvider(): string | null {
+    return auth.currentUser?.providerData[0]?.providerId ?? null;
+  },
+
+  // ⚠️ Elimina TODA la cuenta del nutriólogo y sus datos asociados.
+  // Requiere reautenticación reciente (contraseña o Google) para borrar la cuenta de Auth.
+  async deleteAccount(password?: string): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('No hay sesión activa');
+    const uid = user.uid;
+
+    // 1) Reautenticación (Firebase la exige para borrar la cuenta)
+    const provider = user.providerData[0]?.providerId;
+    if (provider === 'password') {
+      if (!password) throw new Error('reauth-required');
+      const cred = EmailAuthProvider.credential(user.email || '', password);
+      await reauthenticateWithCredential(user, cred);
+    } else if (provider === 'google.com') {
+      await reauthenticateWithPopup(user, new GoogleAuthProvider());
+    }
+
+    const delDocs = async (snap: { docs: { ref: import('firebase/firestore').DocumentReference }[] }) =>
+      Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+
+    // 2) Datos en Firestore
+    // Pacientes (cada uno con sus consultas, seguimientos y archivos)
+    const patientsSnap = await getDocs(query(collection(db, 'patients'), where('nutritionistId', '==', uid)));
+    for (const p of patientsSnap.docs) {
+      try { await delDocs(await getDocs(query(collection(db, 'dailyTrackings'), where('patientId', '==', p.id)))); } catch (e) { console.error(e); }
+      try { await delDocs(await getDocs(collection(db, `patientConsultas/${p.id}/consultas`))); } catch (e) { console.error(e); }
+      try { const ls = await listAll(ref(storage, `patients/${p.id}`)); await Promise.all(ls.items.map((i) => deleteObject(i))); } catch { /* sin archivos */ }
+      try { await deleteDoc(p.ref); } catch (e) { console.error(e); }
+    }
+    // Comidas guardadas (colección legacy)
+    try { await delDocs(await getDocs(query(collection(db, 'savedMeals'), where('nutritionistId', '==', uid)))); } catch (e) { console.error(e); }
+    // Subcolecciones del usuario
+    try { await delDocs(await getDocs(collection(db, `users/${uid}/savedPlans`))); } catch (e) { console.error(e); }
+    try { await delDocs(await getDocs(collection(db, `users/${uid}/savedMealOptions`))); } catch (e) { console.error(e); }
+    // Ingredientes personalizados
+    try { await deleteDoc(doc(db, 'ingredients', `${uid}_all-ingredients`)); } catch { /* puede no existir */ }
+    // Archivos del usuario (avatar / logo / firma)
+    try { const ls = await listAll(ref(storage, `users/${uid}`)); await Promise.all(ls.items.map((i) => deleteObject(i))); } catch { /* sin archivos */ }
+    // Documento de perfil
+    try { await deleteDoc(doc(db, 'users', uid)); } catch (e) { console.error(e); }
+
+    // 3) Cuenta de autenticación
+    await deleteUser(user);
+  },
 };
 
 // CRUD operations for patients

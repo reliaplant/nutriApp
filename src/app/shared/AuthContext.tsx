@@ -51,10 +51,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const auth = authService.getAuth();
+    // En un registro/login con Google, onAuthStateChanged se dispara ANTES de que
+    // se cree el documento del usuario (carrera). Reintentamos para no perder el
+    // userData (y por tanto el onboarding) en cuentas recién creadas.
+    const fetchUserData = async (uid: string) => {
+      for (let i = 0; i < 5; i++) {
+        const data = await authService.getUserData(uid);
+        if (data) return data;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      return null;
+    };
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const userData = await authService.getUserData(firebaseUser.uid);
+          const userData = await fetchUserData(firebaseUser.uid);
           setState({ firebaseUser, userData, loading: false });
         } catch (error) {
           console.error('Error fetching user data:', error);

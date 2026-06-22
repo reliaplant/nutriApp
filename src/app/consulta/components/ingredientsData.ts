@@ -58,6 +58,32 @@ const pickNombre = (a: Alimento, lang: FoodLang): string => {
   return byLang || a.nombre_es || a.nombre || a.nombre_en || "";
 };
 
+// Etiquetas de los grupos L1 por idioma. La clave canónica es el L1 en español
+// (tal como viene en la BDD) y se mantiene para la lógica; solo se traduce al mostrar.
+export const L1_GROUP_LABELS: Record<string, Record<FoodLang, string>> = {
+  "Proteínas": { es: "Proteínas", pt: "Proteínas", en: "Proteins" },
+  "Lácteos y alternativas vegetales": { es: "Lácteos y alternativas vegetales", pt: "Laticínios e alternativas vegetais", en: "Dairy & plant alternatives" },
+  "Verduras": { es: "Verduras", pt: "Verduras", en: "Vegetables" },
+  "Frutas": { es: "Frutas", pt: "Frutas", en: "Fruits" },
+  "Cereales y granos": { es: "Cereales y granos", pt: "Cereais e grãos", en: "Cereals & grains" },
+  "Almidones": { es: "Almidones", pt: "Amidos", en: "Starches" },
+  "Legumbres": { es: "Legumbres", pt: "Leguminosas", en: "Legumes" },
+  "Grasas, aceites y frutos secos": { es: "Grasas, aceites y frutos secos", pt: "Gorduras, óleos e oleaginosas", en: "Fats, oils & nuts" },
+  "Bebidas": { es: "Bebidas", pt: "Bebidas", en: "Beverages" },
+  "Condimentos y especias": { es: "Condimentos y especias", pt: "Condimentos e especiarias", en: "Condiments & spices" },
+  "Dulces y postres": { es: "Dulces y postres", pt: "Doces e sobremesas", en: "Sweets & desserts" },
+  "Harinas y féculas": { es: "Harinas y féculas", pt: "Farinhas e féculas", en: "Flours & starches" },
+  "Suplementos": { es: "Suplementos", pt: "Suplementos", en: "Supplements" },
+  "Comida de bebé": { es: "Comida de bebé", pt: "Comida de bebê", en: "Baby food" },
+  "Otros": { es: "Otros", pt: "Outros", en: "Other" },
+};
+
+export const groupLabel = (l1: string | undefined | null, lang: FoodLang = "es"): string => {
+  if (!l1) return L1_GROUP_LABELS["Otros"][lang];
+  const m = L1_GROUP_LABELS[l1];
+  return m ? m[lang] : l1;
+};
+
 const macros = (v: Valores | undefined) => ({
   calories: v?.kcal ?? 0,
   protein: v?.prot ?? 0,
@@ -116,6 +142,7 @@ const expandAlimento = (a: Alimento, lang: FoodLang): Ingredient | null => {
       .map((s) => s.toLowerCase()),
     // Grupo (L1) y subgrupo (L2) para la biblioteca navegable.
     grupo: typeof a.L1 === "string" ? a.L1 : undefined,
+    grupoLabel: groupLabel(typeof a.L1 === "string" ? a.L1 : undefined, lang),
     subgrupo: typeof a.subgrupo === "string" ? a.subgrupo : undefined,
     // Metadatos para filtros del buscador (no se guardan al seleccionar).
     grupoIntercambio: typeof der.grupo_intercambio === "string" ? der.grupo_intercambio : undefined,

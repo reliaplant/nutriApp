@@ -726,9 +726,15 @@ export default function CrearPlan() {
             nutritionistAvatarUrl={userData?.avatarUrl}
             nutritionistLogoUrl={userData?.logoUrl}
             nutritionistSignatureUrl={userData?.signatureUrl}
+            nutritionistTextSignature={userData?.textSignature}
+            nutritionistUseRealSignature={userData?.useRealSignature}
+            nutritionistSignatureFont={userData?.signatureFont}
             nutritionistSpecialization={userData?.specialization}
             nutritionistPhone={userData?.phone}
             nutritionistEmail={userData?.email}
+            nutritionistWebsite={userData?.website}
+            nutritionistAddress={userData?.officeAddress}
+            nutritionistCredentials={userData?.credentials}
           />
           {/* Indicador de autoguardado (sin botón: se guarda solo) */}
           <div className="px-2 py-1 text-[11px] font-medium flex items-center gap-1.5 select-none">

@@ -51,7 +51,7 @@ export default function LoginPage() {
       if (!userData) throw new Error('No user data');
       const token = await credential.user.getIdToken(true);
       document.cookie = `session=${token}; path=/; max-age=${60 * 60 * 24 * 7}`;
-      router.replace('/pacientes');
+      router.replace(userData.onboardingCompletedAt ? '/pacientes' : '/onboarding');
     } catch (err: any) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError(t('login.errCreds'));
@@ -76,9 +76,10 @@ export default function LoginPage() {
       setError('');
       await authService.register(email, password, displayName);
       const credential = await authService.login(email, password);
+      const userData = await authService.getUserData(credential.user.uid);
       const token = await credential.user.getIdToken(true);
       document.cookie = `session=${token}; path=/; max-age=${60 * 60 * 24 * 7}`;
-      router.replace('/pacientes');
+      router.replace(userData?.onboardingCompletedAt ? '/pacientes' : '/onboarding');
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') setError(t('login.errExists'));
       else setError(err.message || t('login.errEmpty'));
@@ -92,9 +93,10 @@ export default function LoginPage() {
       setLoading(true);
       setError('');
       const credential = await authService.loginWithGoogle();
+      const userData = await authService.getUserData(credential.user.uid);
       const token = await credential.user.getIdToken(true);
       document.cookie = `session=${token}; path=/; max-age=${60 * 60 * 24 * 7}`;
-      router.replace('/pacientes');
+      router.replace(userData?.onboardingCompletedAt ? '/pacientes' : '/onboarding');
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user') return;
       setError(err.message || 'Error al iniciar sesión con Google');

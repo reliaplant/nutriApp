@@ -39,9 +39,10 @@ const PrepSelector: React.FC<PrepSelectorProps> = ({ preparations, value, onChan
   useEffect(() => {
     if (open && triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect();
+      // position: fixed → coordenadas relativas al viewport (sin sumar scroll)
       setPos({
-        top: r.bottom + window.scrollY + 4,
-        left: r.right + window.scrollX - 200,
+        top: r.bottom + 4,
+        left: r.right - 200,
       });
     }
   }, [open]);

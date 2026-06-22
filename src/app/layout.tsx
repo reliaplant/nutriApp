@@ -36,7 +36,15 @@ export default async function RootLayout({
   const lang = await resolveLang();
   return (
     <html lang={lang}>
-      <head />
+      <head>
+        {/* Fuentes de firma (digital) */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Allura&family=Dancing+Script&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <Menu />

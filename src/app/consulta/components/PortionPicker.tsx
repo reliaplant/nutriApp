@@ -53,7 +53,8 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit =
   useEffect(() => {
     if (open && triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + window.scrollY + 4, left: r.right + window.scrollX - 176 });
+      // position: fixed → coordenadas relativas al viewport (sin sumar scroll)
+      setPos({ top: r.bottom + 4, left: r.right - 176 });
     }
   }, [open]);
 
