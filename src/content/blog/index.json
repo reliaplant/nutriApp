@@ -1,0 +1,43 @@
+{
+  "$schema": "Índice de artículos del blog de refeit. Cada entrada describe un artículo cuyo cuerpo vive en src/content/blog/<slug>.md. Para crear un artículo nuevo: 1) añade un objeto aquí, 2) crea el .md con el mismo slug. El campo 'related' enlaza otros artículos por su slug (referencias cruzadas).",
+  "articles": [
+    {
+      "slug": "bam-vs-usda-vs-taco",
+      "title": "BAM vs USDA vs TACO: qué base de datos de alimentos usar en tu consulta",
+      "description": "Comparativa práctica de las bases de datos de composición de alimentos BAM, USDA (FoodData Central) y TACO para nutricionistas. Cuál elegir según tu país, tus pacientes y tus objetivos.",
+      "excerpt": "BAM, USDA y TACO son tres de las bases de datos de composición de alimentos más usadas en consulta. Te explicamos en qué se diferencian, sus fortalezas y cómo elegir la correcta para tus pacientes.",
+      "date": "2026-06-18",
+      "updated": "2026-06-18",
+      "lang": "es",
+      "author": "Verónica Carvalho",
+      "authorRole": "Nutricionista · Co-fundadora de refeit",
+      "authorBio": "Nutricionista y co-fundadora de refeit. Combina la práctica clínica con el trabajo sobre bases de datos de composición de alimentos para que los planes que reciben los pacientes sean precisos y fáciles de seguir.",
+      "authorImage": "/blog/authors/veronica-carvalho.jpg",
+      "category": "Bases de datos",
+      "tags": ["bases de datos", "composición de alimentos", "USDA", "TACO", "BAM", "tablas nutricionales"],
+      "readingMinutes": 9,
+      "cover": "/blog/covers/bam-usda-taco.png",
+      "featured": true,
+      "related": ["top-10-platos-brasil-dietas"]
+    },
+    {
+      "slug": "top-10-platos-brasil-dietas",
+      "title": "Top 10 platos de Brasil para dietas saludables (con su perfil nutricional)",
+      "description": "Diez platos brasileños que encajan en planes de alimentación saludables: valores aproximados de calorías y macros, por qué funcionan en una dieta y cómo adaptarlos para tus pacientes.",
+      "excerpt": "La cocina brasileña tiene muchos más aliados saludables de los que parece. Repasamos 10 platos típicos de Brasil que puedes incorporar a planes de adelgazamiento o mantenimiento, con su perfil nutricional aproximado.",
+      "date": "2026-06-21",
+      "updated": "2026-06-21",
+      "lang": "es",
+      "author": "Verónica Carvalho",
+      "authorRole": "Nutricionista · Co-fundadora de refeit",
+      "authorBio": "Nutricionista y co-fundadora de refeit. Combina la práctica clínica con el trabajo sobre bases de datos de composición de alimentos para que los planes que reciben los pacientes sean precisos y fáciles de seguir.",
+      "authorImage": "/blog/authors/veronica-carvalho.jpg",
+      "category": "Alimentación",
+      "tags": ["Brasil", "platos saludables", "dietas", "planes alimenticios", "cocina latinoamericana"],
+      "readingMinutes": 8,
+      "cover": "/blog/covers/platos-brasil.png",
+      "featured": false,
+      "related": ["bam-vs-usda-vs-taco"]
+    }
+  ]
+}

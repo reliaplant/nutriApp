@@ -292,14 +292,16 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         yPos += 9;
       }
 
-      const fmtQty = (ing: { quantity?: number; unit?: { label: string; g: number } }) => {
+      const fmtQty = (ing: { quantity?: number; unit?: { label: string; g: number }; baseUnit?: 'g' | 'ml' }) => {
         const q = Number(ing.quantity || 0);
         const u = ing.unit;
-        if (u && u.label && u.label !== 'g' && u.g > 0) {
+        const baseLabel = ing.baseUnit === 'ml' ? 'ml' : 'g';
+        const isBase = !u || (u.g === 1 && (u.label === 'g' || u.label === 'ml'));
+        if (u && u.label && u.g > 0 && !isBase) {
           const count = +(q / u.g).toFixed(2);
-          return `${count} ${u.label} (${Math.round(q)} g)`;
+          return `${count} ${u.label} (${Math.round(q)} ${baseLabel})`;
         }
-        return `${Math.round(q)} g`;
+        return `${Math.round(q)} ${baseLabel}`;
       };
 
       const ROW_H = 8;          // alto de fila de alimento

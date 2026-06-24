@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import LandingPage from './components/LandingPage';
 import { t } from '@/app/shared/i18n';
 
-const SITE = 'https://refeit.app';
+const SITE = 'https://refeit.com';
 
 export const metadata: Metadata = {
   title: t('landing.meta.title', 'es') as string,

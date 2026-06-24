@@ -65,7 +65,7 @@ const MenuPage = () => {
   }
 
   // Ocultar menú en consulta y rutas públicas (landing, login, legales, /es, /pt)
-  const hiddenRoutes = ['/consulta', '/login', '/politica-privacidad', '/terminos', '/es', '/pt'];
+  const hiddenRoutes = ['/consulta', '/login', '/politica-privacidad', '/terminos', '/es', '/pt', '/blog'];
   if (pathname === '/' || hiddenRoutes.some(p => pathname === p || pathname?.startsWith(p + '/'))) {
     return null;
   }
@@ -78,8 +78,8 @@ const MenuPage = () => {
             {/* Logo + Nav */}
             <div className="flex items-center">
               <Link href="/pacientes" className="flex-shrink-0 flex items-center gap-2 group">
-                <img src="/icons/refeit-logo.svg" alt="refeit" className="h-7 w-7 transition-transform group-hover:scale-105" />
-                <span className="text-[15px] font-semibold tracking-tight text-gray-900 lowercase" style={{ fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, sans-serif', letterSpacing: '-0.02em' }}>
+                <img src="/icons/refeit-logo.svg?v=2" alt="refeit" className="h-7 w-7 transition-transform group-hover:scale-105" />
+                <span className="text-[16px] text-gray-900 lowercase" style={{ fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif", fontWeight: 600, letterSpacing: '-0.03em' }}>
                   refeit
                 </span>
               </Link>

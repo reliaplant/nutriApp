@@ -26,7 +26,7 @@ const PatientsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [viewMode, setViewMode] = usePersistedView<ViewMode>('nutri.view.pacientes', 'list');
+  const [viewMode, setViewMode] = usePersistedView<ViewMode>('nutri.view.pacientes', 'kanban');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');

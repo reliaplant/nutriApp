@@ -14,14 +14,14 @@ export default function PublicNav({ lang }: { lang: Lang }) {
     >
       <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
         <Link href={home} className="flex items-center gap-2 group">
-          <img src="/icons/refeit-logo.svg" alt="" className="h-7 w-7 transition-transform group-hover:scale-105" />
+          <img src="/icons/refeit-logo.svg?v=2" alt="" className="h-7 w-7 transition-transform group-hover:scale-105" />
           <span className="text-[15px] font-semibold tracking-tight text-gray-900 lowercase" style={{ letterSpacing: '-0.02em' }}>refeit</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-7 text-[13px] text-gray-600">
-          <a href="#funcionalidades" className="hover:text-gray-900 transition-colors">{t('publicNav.features', lang)}</a>
-          <a href="#flujo" className="hover:text-gray-900 transition-colors">{t('publicNav.howItWorks', lang)}</a>
-          <a href="#precios" className="hover:text-gray-900 transition-colors">{t('publicNav.pricing', lang)}</a>
+          <a href={`${home}#funcionalidades`} className="hover:text-gray-900 transition-colors">{t('publicNav.features', lang)}</a>
+          <a href={`${home}#precios`} className="hover:text-gray-900 transition-colors">{t('publicNav.pricing', lang)}</a>
+          <Link href="/blog" className="hover:text-gray-900 transition-colors">Blog</Link>
         </nav>
 
         <div className="flex items-center gap-1.5">

@@ -15,7 +15,8 @@ import 'moment/locale/pt-br';
 import 'moment/locale/es';
 import Meals, { Meal } from '../components/meals';
 import { getCommonIngredients } from '../components/ingredientsData';
-import { patientService, consultationService, authService, planService, SavedPlan } from '@/app/shared/firebase';
+import { patientService, consultationService, authService, planService, SavedPlan, db } from '@/app/shared/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { TagEditor, computeTagOptions, tagsOf, TagUsage } from '@/app/shared/TagEditor';
 import { useAuth } from '@/app/shared/AuthContext';
 import { Patient, Consultation } from '@/app/shared/interfaces';
@@ -116,8 +117,28 @@ export default function CrearPlan() {
     focused: MeasureKey | null;
   }>({ waist: 0, hip: 0, neck: 0, tricipital: 0, subescapular: 0, suprailiaco: 0, arm: 0, calf: 0, wrist: 0, focused: null });
   const [patient, setPatient] = useState<Patient | null>(null);
+  // Ingredientes propios del usuario (creados en la pestaña Ingredientes).
+  const [customIngredients, setCustomIngredients] = useState<ReturnType<typeof getCommonIngredients>>([]);
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        const user = await authService.getAuthStatePromise();
+        if (!user || cancel) return;
+        const snap = await getDoc(doc(db, 'ingredients', `${user.uid}_all-ingredients`));
+        if (cancel || !snap.exists()) return;
+        const items = (snap.data().items as ReturnType<typeof getCommonIngredients>) || [];
+        setCustomIngredients(items.map((it) => ({ ...it, quantity: 100 })));
+      } catch { /* sin propios o sin permiso */ }
+    })();
+    return () => { cancel = true; };
+  }, []);
   // Idioma de los nombres de alimentos = idioma del paciente (cae al de la app si no tiene).
-  const commonIngredientsList = useMemo(() => getCommonIngredients(patient?.language || lang), [patient?.language, lang]);
+  // Los propios del usuario van primero para que aparezcan en el buscador.
+  const commonIngredientsList = useMemo(
+    () => [...customIngredients, ...getCommonIngredients(patient?.language || lang)],
+    [customIngredients, patient?.language, lang]
+  );
   const [consultation, setConsultation] = useState<Consultation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -161,7 +161,7 @@ export default function Pricing({ lang = 'es' as Lang }: { lang?: Lang }) {
                 </div>
                 <p className="text-[11px] text-gray-500">{t('pricing.customBilling', lang)}</p>
 
-                <a href="mailto:hola@refeit.app?subject=Plan%20Empresas"
+                <a href="mailto:hola@refeit.com?subject=Plan%20Empresas"
                   className="mt-5 w-full py-2.5 px-4 rounded-md text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-colors bg-white text-gray-900 hover:bg-gray-50"
                   style={{ border: '1px solid #E8E5DE' }}>
                   {data.cta}
@@ -207,7 +207,7 @@ export default function Pricing({ lang = 'es' as Lang }: { lang?: Lang }) {
 
         <p className="mt-10 text-center text-[12px] text-gray-500">
           {t('pricing.anotherQuestion', lang)}{' '}
-          <a href="mailto:hola@refeit.app" className="text-emerald-700 hover:text-emerald-800 underline underline-offset-2 font-medium">
+          <a href="mailto:hola@refeit.com" className="text-emerald-700 hover:text-emerald-800 underline underline-offset-2 font-medium">
             {t('pricing.writeUs', lang)}
           </a>.
         </p>

@@ -201,7 +201,9 @@ export default function IngredientsPage() {
   const saveDraft = async () => {
     if (!draft) return;
     if (!draft.name.trim()) { setDraftError(t('ingredients.nameRequired')); return; }
-    const name = draft.name.trim();
+    // Normaliza: sin espacios al inicio/fin, un solo espacio entre palabras y
+    // primera letra en mayúscula (ej. "  arroz  integral " → "Arroz integral").
+    const name = draft.name.trim().replace(/\s+/g, ' ').replace(/^(.)/, (c) => c.toUpperCase());
     const dup = propios.findIndex(i => i.name.toLowerCase() === name.toLowerCase());
     if (dup >= 0 && propios[dup].name !== editingName) { setDraftError(t('ingredients.duplicateName')); return; }
     const clean: Ingredient = { ...draft, name, source: 'propio' };

@@ -13,6 +13,8 @@ import MealOptionEditor from '@/app/consulta/components/MealOptionEditor';
 import { ChevronDown, ChevronUp, X, Plus, Pencil, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import SaveMealOption from '@/app/consulta/components/saveMeals';
 import LoadSavedMeal from './LoadSavedMeal';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { authService } from '@/app/shared/firebase';
 import { categoryLabels, categoryColors, categoryIcons, MealCategory, normalizeCategory } from '@/app/comidas/constants';
 import ConfirmDialog from '@/app/components/confirmDialog';
 import { useTranslation } from '@/app/shared/useTranslation';
@@ -23,6 +25,7 @@ export interface MealOption {
   ingredients: Ingredient[];
   isSelectedForSummary?: boolean;
   instructions?: string; // Campo para instrucciones
+  imageUrl?: string | null; // Foto de la receta (subida a Storage)
 }
 
 export interface Meal {
@@ -431,6 +434,32 @@ const MealItem: React.FC<MealItemProps> = ({
                       onMealsChange(updatedMeals);
                     }}
                     category={category}
+                    imageUrl={option.imageUrl ?? null}
+                    onImageSelect={async (file) => {
+                      if (!file) return;
+                      try {
+                        const user = authService.getCurrentUser();
+                        if (!user) return;
+                        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+                        const r = storageRef(getStorage(), `users/${user.uid}/mealImages/${id}`);
+                        await uploadBytes(r, file);
+                        const url = await getDownloadURL(r);
+                        const m = [...meals];
+                        const meal = { ...m[mealIndex] };
+                        const opts = [...meal.options];
+                        opts[optionIndex] = { ...opts[optionIndex], imageUrl: url };
+                        meal.options = opts; m[mealIndex] = meal;
+                        onMealsChange(m);
+                      } catch (e) { console.error('Error subiendo imagen de comida:', e); }
+                    }}
+                    onImageRemove={() => {
+                      const m = [...meals];
+                      const meal = { ...m[mealIndex] };
+                      const opts = [...meal.options];
+                      opts[optionIndex] = { ...opts[optionIndex], imageUrl: null };
+                      meal.options = opts; m[mealIndex] = meal;
+                      onMealsChange(m);
+                    }}
                     optionLabel={`${t('consultation.meals.option')} ${optionIndex + 1}`}
                     onClose={() => setEditingOptionIndex(null)}
                     primaryAction={{

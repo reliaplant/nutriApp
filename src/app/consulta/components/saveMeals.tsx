@@ -5,6 +5,7 @@ import { db, authService } from '@/app/shared/firebase';
 import { MealOption } from '@/app/consulta/components/meals';
 import { categoryLabels, categoryColors, categoryIcons, MealCategory } from '@/app/comidas/constants';
 import { useTranslation } from '@/app/shared/useTranslation';
+import CountryTypeahead from '@/app/shared/CountryTypeahead';
 
 interface SaveMealOptionProps {
   mealName: string;
@@ -27,6 +28,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
   };
 
   const [category, setCategory] = useState<MealCategory>(getInitialCategory());
+  const [country, setCountry] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [justSaved, setJustSaved] = useState(false);
@@ -37,6 +39,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
       const suggested = option.name?.trim() || (option.content || '').split(/[.,\n]/)[0]?.trim().slice(0, 60) || '';
       setSavedName(suggested);
       setCategory(getInitialCategory());
+      setCountry(null);
       setError('');
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -85,6 +88,7 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
       await setDoc(doc(db, `users/${user.uid}/savedMealOptions`, id), {
         name: savedName.trim(),
         category,
+        country: country || null,
         mealOption: cleanOption,
         totalNutrition,
         createdAt: Timestamp.now(),
@@ -205,6 +209,12 @@ const SaveMealOption: React.FC<SaveMealOptionProps> = ({ mealName, option, onSav
                     );
                   })}
                 </div>
+              </div>
+
+              {/* País (comida típica de) */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">Comida típica de país <span className="text-gray-400 normal-case font-normal">(opcional)</span></label>
+                <CountryTypeahead value={country} onChange={setCountry} placeholder="Sin país · busca uno…" />
               </div>
 
               {/* Preview de la receta */}

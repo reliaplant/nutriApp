@@ -44,6 +44,7 @@ function ContentEs() {
         <h2>2. Descripción del servicio</h2>
         <p>refeit es una plataforma de software como servicio (SaaS) dirigida a profesionales de la nutrición, que permite gestionar pacientes, crear planes nutricionales, mantener un recetario, agendar citas y dar seguimiento a la evolución de cada paciente.</p>
         <p>El servicio <strong>no constituye consejo médico</strong>. Todas las decisiones clínicas son responsabilidad exclusiva del profesional que utiliza la herramienta.</p>
+        <p><strong>Fase beta.</strong> Actualmente refeit se encuentra en fase beta. Durante este periodo el acceso es gratuito, algunas funciones pueden cambiar, añadirse o retirarse, y pueden producirse interrupciones, cambios o errores. El servicio se presta &quot;tal cual&quot; y &quot;según disponibilidad&quot;, sin garantía de funcionamiento ininterrumpido. Te recomendamos mantener copias de respaldo de la información importante.</p>
       </section>
       <section id="cuenta">
         <h2>3. Cuenta y responsabilidades</h2>
@@ -57,12 +58,12 @@ function ContentEs() {
       </section>
       <section id="planes">
         <h2>4. Planes y pagos</h2>
-        <p>refeit ofrece un plan gratuito con funcionalidades limitadas y planes de pago con funcionalidades avanzadas. Los precios se publican en la página de precios y pueden modificarse con un preaviso de 30 días.</p>
+        <p><strong>Durante la fase beta, el acceso a refeit es gratuito y no se realizan cobros.</strong> Los precios mostrados en la página de precios son orientativos y entrarán en vigor cuando se activen los planes de pago, con un preaviso razonable. En ningún caso se te cobrará sin tu consentimiento expreso.</p>
         <ul>
-          <li>La facturación es mensual o anual, según elijas.</li>
-          <li>Los pagos se procesan de forma segura mediante Stripe.</li>
-          <li>Puedes cancelar en cualquier momento. La cancelación surte efecto al final del periodo facturado.</li>
-          <li>No realizamos reembolsos por periodos parciales, salvo obligación legal.</li>
+          <li>Durante la beta no se requiere tarjeta ni se procesan pagos.</li>
+          <li>Cuando se activen los planes de pago, la facturación será mensual o anual, según elijas, y se procesará de forma segura a través de un proveedor de pagos externo.</li>
+          <li>Podrás cancelar en cualquier momento; la cancelación surtirá efecto al final del periodo facturado.</li>
+          <li>No realizaremos reembolsos por periodos parciales, salvo obligación legal.</li>
         </ul>
       </section>
       <section id="usoaceptable">
@@ -103,7 +104,7 @@ function ContentEs() {
       </section>
       <section id="contacto">
         <h2>12. Contacto</h2>
-        <p>Para preguntas sobre estos términos, escríbenos a <a href="mailto:legal@refeit.app">legal@refeit.app</a>.</p>
+        <p>Para preguntas sobre estos términos, escríbenos a <a href="mailto:legal@refeit.com">legal@refeit.com</a>.</p>
       </section>
     </>
   );
@@ -120,6 +121,7 @@ function ContentPt() {
         <h2>2. Descrição do serviço</h2>
         <p>A refeit é uma plataforma de software como serviço (SaaS) destinada a profissionais de nutrição, que permite gerenciar pacientes, criar planos nutricionais, manter um receituário, agendar consultas e acompanhar a evolução de cada paciente.</p>
         <p>O serviço <strong>não constitui aconselhamento médico</strong>. Todas as decisões clínicas são de responsabilidade exclusiva do profissional que utiliza a ferramenta.</p>
+        <p><strong>Fase beta.</strong> Atualmente a refeit está em fase beta. Durante este período o acesso é gratuito, algumas funções podem mudar, ser adicionadas ou removidas, e podem ocorrer interrupções, alterações ou erros. O serviço é prestado &quot;no estado em que se encontra&quot; e &quot;conforme disponibilidade&quot;, sem garantia de funcionamento ininterrupto. Recomendamos manter cópias de backup das informações importantes.</p>
       </section>
       <section id="cuenta">
         <h2>3. Conta e responsabilidades</h2>
@@ -133,12 +135,12 @@ function ContentPt() {
       </section>
       <section id="planes">
         <h2>4. Planos e pagamentos</h2>
-        <p>A refeit oferece um plano gratuito com funcionalidades limitadas e planos pagos com funcionalidades avançadas. Os preços são publicados na página de preços e podem ser alterados com aviso prévio de 30 dias.</p>
+        <p><strong>Durante a fase beta, o acesso à refeit é gratuito e não há cobranças.</strong> Os preços exibidos na página de preços são uma referência e entrarão em vigor quando os planos pagos forem ativados, com aviso prévio razoável. Em nenhum caso você será cobrado sem seu consentimento expresso.</p>
         <ul>
-          <li>O faturamento é mensal ou anual, conforme sua escolha.</li>
-          <li>Os pagamentos são processados de forma segura via Stripe.</li>
-          <li>Você pode cancelar a qualquer momento. O cancelamento entra em vigor ao fim do período faturado.</li>
-          <li>Não realizamos reembolsos por períodos parciais, exceto obrigação legal.</li>
+          <li>Durante a beta não é necessário cartão nem são processados pagamentos.</li>
+          <li>Quando os planos pagos forem ativados, o faturamento será mensal ou anual, conforme sua escolha, processado de forma segura por um provedor de pagamentos externo.</li>
+          <li>Você poderá cancelar a qualquer momento; o cancelamento entra em vigor ao fim do período faturado.</li>
+          <li>Não realizaremos reembolsos por períodos parciais, exceto obrigação legal.</li>
         </ul>
       </section>
       <section id="usoaceptable">
@@ -179,7 +181,7 @@ function ContentPt() {
       </section>
       <section id="contacto">
         <h2>12. Contato</h2>
-        <p>Para perguntas sobre estes termos, escreva-nos para <a href="mailto:legal@refeit.app">legal@refeit.app</a>.</p>
+        <p>Para perguntas sobre estes termos, escreva-nos para <a href="mailto:legal@refeit.com">legal@refeit.com</a>.</p>
       </section>
     </>
   );

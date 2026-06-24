@@ -19,6 +19,7 @@ import MealOptionEditor, { MealOptionValue } from '@/app/consulta/components/Mea
 import { getCommonIngredients } from '@/app/consulta/components/ingredientsData';
 import { categoryIcons, MealCategory, normalizeCategory } from './constants';
 import { SavedMeal } from '@/app/shared/interfaces';
+import { getCountry } from '@/app/shared/countries';
 import { useTranslation } from '@/app/shared/useTranslation';
 
 type ViewMode = 'kanban' | 'table';
@@ -47,6 +48,7 @@ export default function SavedMealsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [macroFilter] = useState<MacroFilter>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'refeit' | 'propio'>('all');
+  const [countryFilter, setCountryFilter] = useState<string | 'all'>('all');
   const [sortBy, setSortBy] = useState<string>('lastUsed');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = usePersistedView<ViewMode>('nutri.view.comidas', 'kanban');
@@ -61,6 +63,7 @@ export default function SavedMealsPage() {
   type EditorDraft = {
     name: string;
     category: MealCategory;
+    country: string | null;
     option: MealOptionValue;
     imageUrl: string | null;
     imageFile: File | null;
@@ -144,7 +147,8 @@ export default function SavedMealsPage() {
         if (macroFilter === 'highCarb')    matchesMacro = m.c >= 50;
         if (macroFilter === 'highFat')     matchesMacro = m.f >= 35;
       }
-      return matchesSearch && matchesMacro;
+      const matchesCountry = countryFilter === 'all' || meal.country === countryFilter;
+      return matchesSearch && matchesMacro && matchesCountry;
     });
     arr.sort((a, b) => {
       const dir = sortDirection === 'asc' ? 1 : -1;
@@ -157,7 +161,13 @@ export default function SavedMealsPage() {
       }
     });
     return arr;
-  }, [savedMeals, searchTerm, macroFilter, sourceFilter, sortBy, sortDirection]);
+  }, [savedMeals, searchTerm, macroFilter, sourceFilter, countryFilter, sortBy, sortDirection]);
+
+  // Países presentes entre las comidas (para el filtro).
+  const presentCountries = useMemo(
+    () => Array.from(new Set(savedMeals.map(m => m.country).filter(Boolean))) as string[],
+    [savedMeals]
+  );
 
   // Agrupar por categoría para kanban
   const mealsByCategory = useMemo(() => {
@@ -193,6 +203,7 @@ export default function SavedMealsPage() {
         })),
         instructions: meal.mealOption?.instructions || '',
       },
+      country: meal.country ?? null,
       imageUrl: meal.imageUrl || null,
       imageFile: null,
       removeExistingImage: false,
@@ -204,6 +215,7 @@ export default function SavedMealsPage() {
     setEditorDraft({
       name: '',
       category: preselectCategory || 'snack',
+      country: null,
       option: { name: '', content: '', ingredients: [], instructions: '' },
       imageUrl: null,
       imageFile: null,
@@ -277,6 +289,7 @@ export default function SavedMealsPage() {
       const payload: any = {
         name: editorDraft.name || editorDraft.option.name || t('meals.noName'),
         category: editorDraft.category,
+        country: editorDraft.country || null,
         imageUrl: finalImageUrl,
         mealOption: JSON.parse(JSON.stringify({
           name: editorDraft.option.name || '',
@@ -395,6 +408,36 @@ export default function SavedMealsPage() {
           ))}
         </div>
 
+        {/* Filtro por país (solo si hay comidas con país) */}
+        {presentCountries.length > 0 && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCountryFilter('all')}
+              title={t('meals.source.all')}
+              className={`px-1.5 py-1 text-[13px] rounded transition-colors ${countryFilter === 'all' ? 'bg-gray-800 text-white' : 'hover:bg-gray-100'}`}
+              style={countryFilter !== 'all' ? { border: '1px solid #E8E5DE' } : undefined}
+            >
+              🌎
+            </button>
+            {presentCountries.map(code => {
+              const c = getCountry(code);
+              if (!c) return null;
+              const active = countryFilter === code;
+              return (
+                <button
+                  key={code}
+                  onClick={() => setCountryFilter(code)}
+                  title={c.name}
+                  className={`px-1.5 py-1 text-[13px] rounded transition-colors ${active ? 'ring-2 ring-emerald-300' : 'hover:bg-gray-100'}`}
+                  style={!active ? { border: '1px solid #E8E5DE' } : { border: '1px solid #34D399' }}
+                >
+                  {c.flag}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="ml-auto flex items-center gap-3">
           {/* Toggle vista */}
           <div className="flex items-center rounded p-0.5" style={{ backgroundColor: '#F0EDE8', border: '1px solid #E8E5DE' }}>
@@ -427,8 +470,6 @@ export default function SavedMealsPage() {
         <KanbanBoard
           mealsByCategory={mealsByCategory}
           onEdit={handleEdit}
-          onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
           onCreateInCategory={handleCreate}
           t={t}
         />
@@ -451,6 +492,8 @@ export default function SavedMealsPage() {
           onChange={(opt) => setEditorDraft(d => d ? { ...d, option: opt, name: opt.name || d.name } : d)}
           category={editorDraft.category}
           onCategoryChange={(c) => setEditorDraft(d => d ? { ...d, category: c } : d)}
+          country={editorDraft.country}
+          onCountryChange={(code) => setEditorDraft(d => d ? { ...d, country: code } : d)}
           imageUrl={editorDraft.removeExistingImage ? null : editorDraft.imageUrl}
           imageFile={editorDraft.imageFile}
           onImageSelect={(f) => setEditorDraft(d => d ? { ...d, imageFile: f, removeExistingImage: false } : d)}
@@ -465,13 +508,22 @@ export default function SavedMealsPage() {
             disabled: !editorDraft.option.name && !editorDraft.name,
           }}
           footerLeft={mealToEdit && (
-            <button
-              onClick={() => { setMealToDelete(mealToEdit); setIsDeleteConfirmOpen(true); }}
-              className="p-1.5 rounded transition-colors text-gray-400 hover:text-red-500 hover:bg-red-50"
-              title={t('meals.actions.delete')}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => { handleDuplicate(mealToEdit); closeEditor(); }}
+                className="p-1.5 rounded transition-colors text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                title={t('meals.actions.duplicate')}
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => { setMealToDelete(mealToEdit); setIsDeleteConfirmOpen(true); }}
+                className="p-1.5 rounded transition-colors text-gray-400 hover:text-red-500 hover:bg-red-50"
+                title={t('meals.actions.delete')}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         />
       )}
@@ -528,11 +580,9 @@ export default function SavedMealsPage() {
 const KanbanBoard: React.FC<{
   mealsByCategory: Record<MealCategory, SavedMeal[]>;
   onEdit: (m: SavedMeal) => void;
-  onDelete: (m: SavedMeal) => void;
-  onDuplicate: (m: SavedMeal) => void;
   onCreateInCategory: (cat: MealCategory) => void;
   t: (k: string) => any;
-}> = ({ mealsByCategory, onEdit, onDelete, onDuplicate, onCreateInCategory, t }) => (
+}> = ({ mealsByCategory, onEdit, onCreateInCategory, t }) => (
   <div className="flex-1 min-h-0 flex gap-3 overflow-x-auto -mx-2 px-2">
     {ALL_CATEGORIES.map(cat => {
       const meals = mealsByCategory[cat];
@@ -577,8 +627,6 @@ const KanbanBoard: React.FC<{
                   key={meal.id}
                   meal={meal}
                   onEdit={onEdit}
-                  onDelete={onDelete}
-                  onDuplicate={onDuplicate}
                   t={t}
                 />
               ))
@@ -593,47 +641,35 @@ const KanbanBoard: React.FC<{
 const KanbanCard: React.FC<{
   meal: SavedMeal;
   onEdit: (m: SavedMeal) => void;
-  onDelete: (m: SavedMeal) => void;
-  onDuplicate: (m: SavedMeal) => void;
   t: (k: string) => any;
-}> = ({ meal, onEdit, onDelete, onDuplicate, t }) => {
-  const ingCount = meal.mealOption?.ingredients?.length || 0;
+}> = ({ meal, onEdit, t }) => {
   return (
     <div
       onClick={() => onEdit(meal)}
-      className="group bg-white rounded-md p-2.5 transition-all cursor-pointer hover:shadow-sm"
+      className="group bg-white rounded-md p-1.5 flex items-center gap-2.5 transition-all cursor-pointer hover:shadow-sm"
       style={{ border: '1px solid #E8E5DE' }}
     >
-      <div className="flex items-start gap-2">
-        <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: '#FAF9F7', border: '1px solid #F0EDE8' }}>
-          {meal.imageUrl ? (
-            <img src={meal.imageUrl} alt={meal.name} className="w-full h-full object-cover" />
-          ) : (
-            <ImageIcon className="w-3.5 h-3.5 text-gray-300" />
+      <div className="w-14 h-14 rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: '#FAF9F7', border: '1px solid #F0EDE8' }}>
+        {meal.imageUrl ? (
+          <img src={meal.imageUrl} alt={meal.name} className="w-full h-full object-cover" />
+        ) : (
+          <ImageIcon className="w-5 h-5 text-gray-300" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0 pr-1">
+        <div className="text-xs font-semibold text-gray-800 leading-snug line-clamp-2" title={meal.name}>
+          {meal.name || t('meals.noName')}
+        </div>
+        <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mt-1 tabular-nums">
+          <span className="font-semibold text-gray-700">{Math.round(meal.totalNutrition?.calories || 0)} <span className="font-normal text-gray-400">kcal</span></span>
+          {getCountry(meal.country) && <span className="text-[12px] leading-none">{getCountry(meal.country)!.flag}</span>}
+          {(meal.usageCount || 0) > 0 && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="text-gray-400">{meal.usageCount}×</span>
+            </>
           )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-gray-800 truncate leading-tight" title={meal.name}>
-            {meal.name || t('meals.noName')}
-          </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mt-1 tabular-nums">
-            <span className="font-semibold text-gray-700">{Math.round(meal.totalNutrition?.calories || 0)} <span className="font-normal text-gray-400">kcal</span></span>
-            <span className="text-gray-300">·</span>
-            <span>{ingCount} ing</span>
-            {(meal.usageCount || 0) > 0 && (
-              <>
-                <span className="text-gray-300">·</span>
-                <span className="text-gray-400">{meal.usageCount}×</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Acciones (en hover) */}
-        <div className="flex items-center -mr-1 -mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-          <CardIcon onClick={(e) => { e.stopPropagation(); onDuplicate(meal); }} title={t('meals.actions.duplicate')} icon={<Copy className="w-3 h-3" />} />
-          <CardIcon onClick={(e) => { e.stopPropagation(); onDelete(meal); }} title={t('meals.actions.delete')} icon={<Trash2 className="w-3 h-3" />} danger />
         </div>
       </div>
     </div>
@@ -693,7 +729,7 @@ const MealsTable: React.FC<{
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="font-medium text-gray-800 truncate text-xs leading-tight">{meal.name || t('meals.noName')}</div>
+                      <div className="font-medium text-gray-800 truncate text-xs leading-tight">{getCountry(meal.country) && <span className="mr-1">{getCountry(meal.country)!.flag}</span>}{meal.name || t('meals.noName')}</div>
                       <div className="text-[10px] text-gray-400 truncate">{meal.mealOption?.content || '—'}</div>
                     </div>
                   </div>

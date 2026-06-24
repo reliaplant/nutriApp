@@ -133,6 +133,7 @@ export interface SavedMeal {
   usageCount: number;
   lastUsedDate: any | null;
   imageUrl: string | null;
+  country?: string | null;
   nutritionistId?: string;
 }
 

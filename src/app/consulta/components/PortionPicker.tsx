@@ -8,13 +8,12 @@ import { getPortionsForIngredient, parsePortion } from './portionsHelper';
 import { useTranslation } from '@/app/shared/useTranslation';
 
 type Unit = { label: string; g: number };
-const GRAM_UNIT: Unit = { label: 'g', g: 1 };
 
 interface PortionPickerProps {
-  ingredient: Pick<Ingredient, 'name' | 'icon' | 'portions'>;
+  ingredient: Pick<Ingredient, 'name' | 'icon' | 'portions' | 'baseUnit'>;
   /** Gramos actuales (siempre se almacena en gramos). */
   grams: number;
-  /** Unidad elegida (g por defecto). */
+  /** Unidad elegida (la base del alimento por defecto). */
   unit?: Unit;
   /** Notifica nuevos gramos + unidad. */
   onChange: (newGrams: number, unit: Unit) => void;
@@ -26,16 +25,19 @@ interface PortionPickerProps {
  * Si la unidad no es gramos, se muestra el equivalente "≈ N g".
  * Internamente quantity SIEMPRE se almacena en gramos.
  */
-const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit = GRAM_UNIT, onChange }) => {
+const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit: unitProp, onChange }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
+  // Unidad base del alimento: ml para líquidos, g para sólidos.
+  const baseUnit: Unit = ingredient.baseUnit === 'ml' ? { label: 'ml', g: 1 } : { label: 'g', g: 1 };
+  const unit = unitProp ?? baseUnit;
   const portions = getPortionsForIngredient(ingredient);
-  const isGram = unit.label === 'g';
-  const count = isGram ? grams : (unit.g > 0 ? grams / unit.g : grams);
+  const isBase = unit.g === 1 && (unit.label === 'g' || unit.label === 'ml');
+  const count = isBase ? grams : (unit.g > 0 ? grams / unit.g : grams);
   const countStr = count === 0 ? '' : String(Math.round(count * 100) / 100);
 
   useEffect(() => {
@@ -60,10 +62,10 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit =
 
   const setCount = (v: string) => {
     const c = v === '' ? 0 : Number(v);
-    onChange(isGram ? c : c * unit.g, unit);
+    onChange(isBase ? c : c * unit.g, unit);
   };
 
-  const pickGram = () => { onChange(grams, GRAM_UNIT); setOpen(false); };
+  const pickBase = () => { onChange(grams, baseUnit); setOpen(false); };
   const pickPortion = (label: string, totalG: number) => {
     const parsed = parsePortion({ label, gramos: totalG });
     onChange(totalG, { label: parsed.label, g: parsed.perUnit });
@@ -77,7 +79,7 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit =
         type="number"
         value={countStr}
         onChange={(e) => setCount(e.target.value)}
-        step={isGram ? 1 : 0.5}
+        step={isBase ? 1 : 0.5}
         min="0"
       />
       <button
@@ -92,7 +94,7 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit =
         <ChevronDown className="h-2.5 w-2.5 flex-shrink-0" />
       </button>
       <span className="w-[48px] flex-shrink-0 text-[10px] tabular-nums" style={{ color: '#A8A29E' }}>
-        {isGram ? '' : `≈${Math.round(grams)}g`}
+        {isBase ? '' : `≈${Math.round(grams)}${baseUnit.label}`}
       </span>
 
       {open && createPortal(
@@ -106,14 +108,14 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit =
           </div>
           <button
             type="button"
-            onClick={pickGram}
+            onClick={pickBase}
             className="w-full flex items-center justify-between px-2.5 py-1.5 text-[11px] text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
           >
-            <span className="flex items-center gap-1.5">{isGram && <Check className="w-3 h-3 text-emerald-600" />}<span className={isGram ? '' : 'pl-[18px]'}>Gramos</span></span>
-            <span className="text-[10px]" style={{ color: '#A8A29E' }}>g</span>
+            <span className="flex items-center gap-1.5">{isBase && <Check className="w-3 h-3 text-emerald-600" />}<span className={isBase ? '' : 'pl-[18px]'}>{baseUnit.label === 'ml' ? 'Mililitros' : 'Gramos'}</span></span>
+            <span className="text-[10px]" style={{ color: '#A8A29E' }}>{baseUnit.label}</span>
           </button>
           {portions.map((p, i) => {
-            const active = !isGram && unit.label === parsePortion({ label: p.label, gramos: p.gramos }).label;
+            const active = !isBase && unit.label === parsePortion({ label: p.label, gramos: p.gramos }).label;
             return (
               <button
                 key={i}
@@ -122,7 +124,7 @@ const PortionPicker: React.FC<PortionPickerProps> = ({ ingredient, grams, unit =
                 className="w-full flex items-center justify-between px-2.5 py-1.5 text-[11px] text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
               >
                 <span className="flex items-center gap-1.5">{active && <Check className="w-3 h-3 text-emerald-600" />}<span className={active ? '' : 'pl-[18px]'}>{p.label}</span></span>
-                <span className="text-[10px] tabular-nums" style={{ color: '#A8A29E' }}>{p.gramos} g</span>
+                <span className="text-[10px] tabular-nums" style={{ color: '#A8A29E' }}>{p.gramos} {baseUnit.label}</span>
               </button>
             );
           })}

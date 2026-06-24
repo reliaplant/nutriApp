@@ -21,6 +21,10 @@ import {
 
 type ResetState = { sent: boolean };
 
+// Solo permitir autenticación con Google. El login/registro con email+contraseña
+// queda en el código pero oculto. Cambiar a false para reactivarlo.
+const GOOGLE_ONLY = true;
+
 export default function LoginPage() {
   const { t, lang, setLang } = useTranslation();
   const router = useRouter();
@@ -183,10 +187,10 @@ export default function LoginPage() {
           <div className="w-full max-w-sm">
             {/* Brand */}
             <Link href="/" className="flex items-center gap-2 mb-10 group">
-              <img src="/icons/refeit-logo.svg" alt="" className="h-8 w-8 transition-transform group-hover:scale-105" />
+              <img src="/icons/refeit-logo.svg?v=2" alt="" className="h-8 w-8 transition-transform group-hover:scale-105" />
               <span
-                className="text-[18px] font-semibold tracking-tight text-gray-900 lowercase"
-                style={{ letterSpacing: '-0.02em' }}
+                className="text-[19px] text-gray-900 lowercase"
+                style={{ fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif", fontWeight: 600, letterSpacing: '-0.03em' }}
               >
                 refeit
               </span>
@@ -214,7 +218,7 @@ export default function LoginPage() {
             </div>
 
             {/* Tabs */}
-            {!showResetForm && (
+            {!showResetForm && !GOOGLE_ONLY && (
               <div className="flex gap-1 p-1 mb-5 rounded-md" style={{ backgroundColor: '#F0EDE8', border: '1px solid #E8E5DE' }}>
                 {[
                   { id: 'login', label: t('login.tabLogin') },
@@ -249,8 +253,15 @@ export default function LoginPage() {
               </div>
             )}
 
+            {/* Solo Google */}
+            {GOOGLE_ONLY && !showResetForm && (
+              <div className="space-y-3">
+                <GoogleButton loading={loading} onClick={handleGoogleLogin} />
+              </div>
+            )}
+
             {/* Login */}
-            {activeTab === 'login' && !showResetForm && (
+            {!GOOGLE_ONLY && activeTab === 'login' && !showResetForm && (
               <form onSubmit={handleLogin} className="space-y-3">
                 <FieldEmail value={email} onChange={setEmail} disabled={loading} label={t('login.email')} />
                 <FieldPassword
@@ -281,7 +292,7 @@ export default function LoginPage() {
             )}
 
             {/* Register */}
-            {activeTab === 'register' && !showResetForm && (
+            {!GOOGLE_ONLY && activeTab === 'register' && !showResetForm && (
               <form onSubmit={handleRegister} className="space-y-3">
                 <Field
                   icon={<User className="w-3.5 h-3.5" />}

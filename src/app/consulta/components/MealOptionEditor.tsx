@@ -8,6 +8,7 @@ import PortionPicker from './PortionPicker';
 import PrepSelector from './PrepSelector';
 import { getDefaultGramsForIngredient, getPortionsForIngredient, parsePortion, pickReasonablePortion } from './portionsHelper';
 import { categoryLabels, categoryIcons, MealCategory, normalizeCategory } from '@/app/comidas/constants';
+import CountryTypeahead from '@/app/shared/CountryTypeahead';
 import { useTranslation } from '@/app/shared/useTranslation';
 
 export interface MealOptionValue {
@@ -23,6 +24,10 @@ interface MealOptionEditorProps {
 
   category: MealCategory;
   onCategoryChange?: (cat: MealCategory) => void;
+
+  // País típico (opcional) — solo se muestra el selector si se pasa onCountryChange
+  country?: string | null;
+  onCountryChange?: (code: string | null) => void;
 
   // Imagen (opcional)
   imageUrl?: string | null;
@@ -52,6 +57,8 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   onChange,
   category,
   onCategoryChange,
+  country,
+  onCountryChange,
   imageUrl,
   imageFile,
   onImageSelect,
@@ -108,7 +115,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
     // Default: si hay medidas caseras, arranca con la más razonable como UNIDAD
     // (ej. "1 filete", "1 rebanada"); si no, en gramos.
     let grams: number;
-    let unit: { label: string; g: number } = { label: 'g', g: 1 };
+    let unit: { label: string; g: number } = { label: ing.baseUnit === 'ml' ? 'ml' : 'g', g: 1 };
     if (ing.quantity && ing.quantity !== 100) {
       grams = ing.quantity; // el typeahead ya resolvió gramos explícitos
     } else {
@@ -133,6 +140,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
           carbs:    Number(ing.carbs)    || 0,
           fat:      Number(ing.fat)      || 0,
           icon: ing.icon,
+          baseUnit: ing.baseUnit,
           portions: ing.portions,
           preparations: ing.preparations,
           baseName: ing.baseName ?? ing.name,
@@ -213,7 +221,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
         )}
 
         {/* ─── Encabezado ─── */}
-        <div className="flex items-center justify-between px-5 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid #E8E5DE' }}>
+        <div className="flex items-center gap-3 px-5 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid #E8E5DE' }}>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-[#A8A29E] font-semibold">
             <img src={`/icons/${catIcon}.svg`} alt="" className="w-4 h-4" />
             {onCategoryChange ? (
@@ -247,9 +255,14 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
               <span>{t(`meals.categories.${category}`)}{optionLabel ? ` · ${optionLabel}` : ''}</span>
             )}
           </div>
+          {onCountryChange && (
+            <div className="w-52">
+              <CountryTypeahead value={country ?? null} onChange={onCountryChange} placeholder="País típico (opcional)…" />
+            </div>
+          )}
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 transition-colors flex-shrink-0"
+            className="ml-auto p-1 rounded hover:bg-gray-100 transition-colors flex-shrink-0"
             title={t('consultation.editor.close')}
           >
             <X className="h-4 w-4 text-gray-500" />
@@ -269,7 +282,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                     <button
                       type="button"
                       onClick={triggerFile}
-                      className="w-full h-full rounded-sm flex items-center justify-center text-gray-400 transition-colors overflow-hidden hover:bg-gray-50"
+                      className="group/img w-full h-full rounded-sm relative flex items-center justify-center text-gray-400 transition-colors overflow-hidden"
                       style={{ backgroundColor: '#F4F2EE', border: '1px solid #E8E5DE' }}
                       title={previewSrc ? t('consultation.editor.changeImage') : t('consultation.editor.addImage')}
                     >
@@ -282,6 +295,13 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                           <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
                         </svg>
                       )}
+                      {/* Overlay de hover: indica que se puede cargar/cambiar */}
+                      <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/45 text-white opacity-0 group-hover/img:opacity-100 transition-opacity">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-6 h-6">
+                          <path d="M12 16V4m0 0L8 8m4-4 4 4" /><path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2" />
+                        </svg>
+                        <span className="text-[10px] font-semibold px-2 text-center leading-tight">{previewSrc ? t('consultation.editor.changeImage') : t('consultation.editor.addImage')}</span>
+                      </span>
                     </button>
                     {previewSrc && onImageRemove && (
                       <button

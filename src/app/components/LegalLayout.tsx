@@ -54,7 +54,7 @@ export default function LegalLayout({ title, subtitle, lastUpdated, sections, ch
       >
         <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <img src="/icons/refeit-logo.svg" alt="" className="h-7 w-7 transition-transform group-hover:scale-105" />
+            <img src="/icons/refeit-logo.svg?v=2" alt="" className="h-7 w-7 transition-transform group-hover:scale-105" />
             <span
               className="text-[15px] font-semibold tracking-tight text-gray-900 lowercase"
               style={{ letterSpacing: '-0.02em' }}

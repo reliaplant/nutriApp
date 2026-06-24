@@ -37,6 +37,8 @@ export interface Ingredient {
   prepKey?: string;
   /** Unidad de medida elegida para la cantidad (g por defecto). quantity siempre en gramos. */
   unit?: { label: string; g: number };
+  /** Unidad base del alimento: 'g' (sólidos) o 'ml' (líquidos). quantity siempre en gramos. */
+  baseUnit?: 'g' | 'ml';
   /** Sinónimos/variantes regionales para el buscador (no se muestran). */
   keywords?: string[];
   /** Grupo (L1) y subgrupo (L2) para la biblioteca navegable. */
@@ -44,6 +46,8 @@ export interface Ingredient {
   /** Etiqueta de grupo (L1) ya traducida al idioma activo (para mostrar). */
   grupoLabel?: string;
   subgrupo?: string;
+  /** Etiqueta del subgrupo traducida al idioma del paciente (para los chips). */
+  subgrupoLabel?: string;
   /** Metadatos para filtros del buscador (no se guardan al seleccionar). */
   grupoIntercambio?: string;
   macroDominante?: string;
@@ -51,6 +55,10 @@ export interface Ingredient {
   flags?: Record<string, boolean>;
   alergenos?: string[];
 }
+
+// Grupos (L1) cuyos chips de ayuda se muestran por SUBGRUPO (ej. Proteínas →
+// Pollo, Res, Cerdo, Pescados…). El resto de grupos se muestra por grupo (L1).
+const CHIP_BY_SUBGROUP = new Set<string>(['Proteínas', 'Lácteos y alternativas vegetales']);
 
 // Filtros clínicos disponibles en el buscador.
 // Cada uno define un predicado sobre el ingrediente.
@@ -181,35 +189,30 @@ const IngredientTypeahead = ({
       a.ing.name.localeCompare(b.ing.name)
     );
 
-    // Chips de grupo: a partir de los resultados, qué subgrupos/grupos predominan.
+    // Chips de grupo: filtros de ayuda a partir de los resultados.
+    // Algunos grupos (L1) se filtran por SUBGRUPO (ej. Proteínas → Pollo, Res, Cerdo,
+    // Pescados…); el resto se filtra solo por GRUPO (Verduras, Dulces, Frutas…).
     if (hasQuery) {
-      const subC: Record<string, number> = {};
-      const l1C: Record<string, number> = {};
-      const subToL1: Record<string, string> = {};
-      const subIcon: Record<string, string> = {};
-      const l1Icon: Record<string, string> = {};
-      const l1Label: Record<string, string> = {};
+      const cnt: Record<string, number> = {};
+      const meta: Record<string, GroupChip> = {};
       for (const { ing } of scored) {
-        if (ing.subgrupo) {
-          subC[ing.subgrupo] = (subC[ing.subgrupo] || 0) + 1;
-          if (ing.grupo) subToL1[ing.subgrupo] = ing.grupo;
-          if (!subIcon[ing.subgrupo] && ing.icon) subIcon[ing.subgrupo] = ing.icon;
-        }
-        if (ing.grupo) {
-          l1C[ing.grupo] = (l1C[ing.grupo] || 0) + 1;
-          if (!l1Icon[ing.grupo] && ing.icon) l1Icon[ing.grupo] = ing.icon;
-          if (!l1Label[ing.grupo]) l1Label[ing.grupo] = ing.grupoLabel || ing.grupo;
+        const useSub = !!(ing.grupo && CHIP_BY_SUBGROUP.has(ing.grupo) && ing.subgrupo);
+        if (useSub) {
+          const key = 'sub:' + ing.subgrupo;
+          cnt[key] = (cnt[key] || 0) + 1;
+          if (!meta[key]) meta[key] = { kind: 'sub', value: ing.subgrupo!, label: ing.subgrupoLabel || ing.subgrupo!, l1: ing.grupo!, icono: ing.icon };
+        } else if (ing.grupo) {
+          const key = 'l1:' + ing.grupo;
+          cnt[key] = (cnt[key] || 0) + 1;
+          if (!meta[key]) meta[key] = { kind: 'l1', value: ing.grupo, label: ing.grupoLabel || ing.grupo, l1: ing.grupo, icono: ing.icon };
         }
       }
-      const chips: GroupChip[] = [];
-      // Subgrupos (L2) no tienen traducción: se muestran tal cual.
-      Object.entries(subC).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 3)
-        .forEach(([value]) => chips.push({ kind: 'sub', value, label: value, l1: subToL1[value] || '', icono: subIcon[value] }));
-      Object.entries(l1C).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 2)
-        .forEach(([value]) => {
-          if (!chips.some((ch) => ch.value.toLowerCase() === value.toLowerCase())) chips.push({ kind: 'l1', value, label: l1Label[value] || value, l1: value, icono: l1Icon[value] });
-        });
-      setGroupChips(chips.slice(0, 4));
+      const chips = Object.entries(cnt)
+        .filter(([, c]) => c >= 2)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([k]) => meta[k]);
+      setGroupChips(chips);
     } else {
       setGroupChips([]);
     }

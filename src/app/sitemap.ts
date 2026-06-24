@@ -1,10 +1,11 @@
 import type { MetadataRoute } from 'next';
+import blogIndex from '@/content/blog/index.json';
 
-const SITE = 'https://refeit.app';
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://refeit.com';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  const routes = ['', '/login', '/politica-privacidad', '/terminos'];
+  const routes = ['', '/politica-privacidad', '/terminos'];
   const langs = ['es', 'pt'] as const;
 
   const entries: MetadataRoute.Sitemap = [];
@@ -33,6 +34,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.5,
+    });
+  }
+
+  // Blog: índice + cada artículo
+  entries.push({
+    url: `${SITE}/blog`,
+    lastModified: now,
+    changeFrequency: 'weekly',
+    priority: 0.8,
+  });
+  for (const article of blogIndex.articles) {
+    entries.push({
+      url: `${SITE}/blog/${article.slug}`,
+      lastModified: new Date(article.updated || article.date),
+      changeFrequency: 'monthly',
+      priority: 0.7,
     });
   }
 

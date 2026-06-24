@@ -1,5 +1,6 @@
 import type { Ingredient, IngredientPortion, IngredientPrep } from "./IngredientTypeahead";
 import bdd from "@/app/shared/bdd_nutricional.json";
+import { translatePortionLabel, translateSubgroup } from "./portionI18n";
 
 // Base de datos nutricional propia — 562 alimentos curados.
 // Cada alimento trae nombres es/en/pt, keywords (sinónimos regionales),
@@ -33,6 +34,7 @@ type Alimento = {
   L1_id?: string;
   subgrupo?: string | null;
   icono?: string;
+  unidad?: string;
   nutrientes_100g?: Record<string, EstadoBlock>;
   medidas?: Medida[] | null;
   flags?: Record<string, unknown>;
@@ -91,11 +93,14 @@ const macros = (v: Valores | undefined) => ({
   fat: v?.grasa ?? 0,
 });
 
-const mapMedidas = (raw: Medida[] | null | undefined): IngredientPortion[] => {
+const mapMedidas = (raw: Medida[] | null | undefined, lang: FoodLang): IngredientPortion[] => {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((m) => typeof m?.g === "number" && (m.g as number) > 0)
-    .map((m) => ({ label: m.label || `${m.g} g`, grams: m.g as number }));
+    .map((m) => ({
+      label: m.label ? translatePortionLabel(m.label, lang) : `${m.g} g`,
+      grams: m.g as number,
+    }));
 };
 
 // Orden de estados para elegir el representativo (default).
@@ -105,7 +110,7 @@ const expandAlimento = (a: Alimento, lang: FoodLang): Ingredient | null => {
   const name = pickNombre(a, lang);
   if (!name) return null;
   const nut = a.nutrientes_100g || {};
-  const portions = mapMedidas(a.medidas);
+  const portions = mapMedidas(a.medidas, lang);
 
   // Construir preparaciones a partir de los estados crudo/cocido.
   // NA (alimento sin distinción) NO genera selector de preparación.
@@ -134,6 +139,7 @@ const expandAlimento = (a: Alimento, lang: FoodLang): Ingredient | null => {
     quantity: 100,
     ...rep,
     icon: a.icono || "generico",
+    baseUnit: a.unidad === "ml" ? "ml" : "g",
     portions,
     preparations: preparations.length > 1 ? preparations : undefined,
     // Keywords = sinónimos + grupo (L1) + subgrupo (L2) → permite buscar por grupo.
@@ -144,6 +150,7 @@ const expandAlimento = (a: Alimento, lang: FoodLang): Ingredient | null => {
     grupo: typeof a.L1 === "string" ? a.L1 : undefined,
     grupoLabel: groupLabel(typeof a.L1 === "string" ? a.L1 : undefined, lang),
     subgrupo: typeof a.subgrupo === "string" ? a.subgrupo : undefined,
+    subgrupoLabel: typeof a.subgrupo === "string" ? translateSubgroup(a.subgrupo, lang) : undefined,
     // Metadatos para filtros del buscador (no se guardan al seleccionar).
     grupoIntercambio: typeof der.grupo_intercambio === "string" ? der.grupo_intercambio : undefined,
     macroDominante: typeof der.macro_dominante === "string" ? der.macro_dominante : undefined,
