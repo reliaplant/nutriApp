@@ -26,6 +26,9 @@ export interface Patient {
   medicalConditions?: string[];
   medications?: string[];
   dietaryRestrictions?: string[];
+  likedFoods?: string[];      // alimentos que le gustan mucho (nombres)
+  dislikedFoods?: string[];   // alimentos que no le gustan (nombres)
+  preferencesNote?: string;   // preferencias específicas en texto libre
   photoUrl?: string; // Add this field to support patient photos
   nextAppointmentDate?: string | null;
 }

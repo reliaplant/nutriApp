@@ -178,6 +178,16 @@ export interface SavedMeal {
   nutritionistId: string;
 }
 
+// Indicación guardada (plantilla reutilizable de indicaciones para el paciente)
+export interface SavedIndication {
+  id?: string;
+  title: string;
+  content: string;
+  usageCount?: number;
+  createdAt?: Timestamp;
+  nutritionistId: string;
+}
+
 // Authentication service
 export const authService = {
   // Expose the auth instance
@@ -927,6 +937,49 @@ export const savedMealService = {
     });
   }
 };
+
+// Servicio para indicaciones guardadas (plantillas reutilizables por usuario)
+export const savedIndicationService = {
+  async getSavedIndications(): Promise<SavedIndication[]> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) return [];
+    const q = query(
+      collection(db, "savedIndications"),
+      where("nutritionistId", "==", currentUser.uid)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as SavedIndication))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  },
+
+  async createSavedIndication(indication: { title: string; content: string }): Promise<string> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) throw new Error("Debes iniciar sesión para guardar indicaciones");
+    const docRef = await addDoc(collection(db, "savedIndications"), {
+      title: indication.title.trim(),
+      content: indication.content,
+      nutritionistId: currentUser.uid,
+      usageCount: 0,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  },
+
+  async deleteSavedIndication(id: string): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) throw new Error("Debes iniciar sesión para eliminar indicaciones");
+    const ref = doc(db, "savedIndications", id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const existing = snap.data() as SavedIndication;
+    if (existing.nutritionistId !== currentUser.uid) {
+      throw new Error("No tienes permiso para eliminar esta indicación");
+    }
+    await deleteDoc(ref);
+  },
+};
+
 async function updateNextAppointmentDate(patientId: string): Promise<void> {
   try {
     const patientRef = doc(db, "patients", patientId);

@@ -15,6 +15,11 @@ import 'moment/locale/pt-br';
 import 'moment/locale/es';
 import Meals, { Meal } from '../components/meals';
 import { getCommonIngredients } from '../components/ingredientsData';
+import FoodPreferenceList from '../components/FoodPreferenceList';
+import IndicationLibrary from '../components/IndicationLibrary';
+import IndicationAssistant from '../components/IndicationAssistant';
+import ClinicalConditions from '../components/ClinicalConditions';
+import { AlertCircle } from 'lucide-react';
 import { patientService, consultationService, authService, planService, SavedPlan, db } from '@/app/shared/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { TagEditor, computeTagOptions, tagsOf, TagUsage } from '@/app/shared/TagEditor';
@@ -108,6 +113,7 @@ export default function CrearPlan() {
   const [activeTab, setActiveTab] = useState('summary');
   const [notasContent, setNotasContent] = useState('');
   const [indicacionesContent, setIndicacionesContent] = useState('');
+  const [prefNote, setPrefNote] = useState('');
   // Medidas corporales tomadas en esta consulta (opcional)
   type MeasureKey = 'waist' | 'hip' | 'neck' | 'tricipital' | 'subescapular' | 'suprailiaco' | 'arm' | 'calf' | 'wrist';
   const [measurements, setMeasurements] = useState<{
@@ -128,7 +134,7 @@ export default function CrearPlan() {
         const snap = await getDoc(doc(db, 'ingredients', `${user.uid}_all-ingredients`));
         if (cancel || !snap.exists()) return;
         const items = (snap.data().items as ReturnType<typeof getCommonIngredients>) || [];
-        setCustomIngredients(items.map((it) => ({ ...it, quantity: 100 })));
+        setCustomIngredients(items.map((it) => ({ ...it, id: it.id ?? `custom:${it.name}`, quantity: 100 })));
       } catch { /* sin propios o sin permiso */ }
     })();
     return () => { cancel = true; };
@@ -139,6 +145,17 @@ export default function CrearPlan() {
     () => [...customIngredients, ...getCommonIngredients(patient?.language || lang)],
     [customIngredients, patient?.language, lang]
   );
+
+  // Preferencias alimentarias del paciente — se persisten al instante.
+  const updatePrefs = async (patch: { likedFoods?: string[]; dislikedFoods?: string[]; preferencesNote?: string; medicalConditions?: string[] }) => {
+    if (!patient) return;
+    setPatient({ ...patient, ...patch });
+    try {
+      await patientService.updatePatient(patient.id, patch);
+    } catch (e) {
+      console.error('Error guardando preferencias:', e);
+    }
+  };
   const [consultation, setConsultation] = useState<Consultation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -305,6 +322,7 @@ export default function CrearPlan() {
             return;
           }
           setPatient(patientData);
+          setPrefNote(patientData.preferencesNote || '');
           setSetupPatientData({
             height: patientData.height || 0,
             birthDate: patientData.birthDate || '',
@@ -697,7 +715,7 @@ export default function CrearPlan() {
   return (
     <div className="bg-cream-pattern flex flex-col">
       {/* Subheader fijo */}
-      <div className="sticky top-0 z-10 bg-white flex items-center justify-between" style={{ borderBottom: '1px solid #E8E5DE' }}>
+      <div className="sticky top-0 z-20 bg-white flex items-center justify-between" style={{ borderBottom: '1px solid #E8E5DE', boxShadow: '0 2px 8px -3px rgba(40,37,32,0.10)' }}>
         <div className="flex items-center">
           <Link href={`/detalle-paciente/${patientId}`} className="flex items-center gap-1 text-[11px] text-gray-600 hover:text-emerald-700 transition-colors px-4 py-1.5" style={{ borderRight: '1px solid #E8E5DE' }}>
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -1237,11 +1255,11 @@ export default function CrearPlan() {
       {currentStep === 'plan' && (
       <div className="flex flex-row">
         {/* Panel lateral sticky con pestañas */}
-        <div className="w-1/4 h-[calc(100vh-2.25rem)] sticky top-[2.25rem] overflow-auto bg-white" style={{ borderRight: '1px solid #E8E5DE' }}>
-          <div className="flex" style={{ borderBottom: '1px solid #E8E5DE' }}>
+        <div className="w-1/3 min-w-[340px] max-w-[440px] h-[calc(100vh-2.25rem)] sticky top-[2.25rem] overflow-y-auto overflow-x-hidden bg-white z-10" style={{ borderRight: '1px solid #E8E5DE', boxShadow: '4px 0 14px -6px rgba(40,37,32,0.10)' }}>
+          <div className="flex overflow-x-auto" style={{ borderBottom: '1px solid #E8E5DE' }}>
             <button
               onClick={() => setActiveTab('summary')}
-              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+              className={`px-3 py-2 text-[10px] font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'summary' 
                   ? 'text-emerald-700 border-b-2 border-emerald-600' 
                   : 'text-gray-500 hover:text-gray-700'
@@ -1251,7 +1269,7 @@ export default function CrearPlan() {
             </button>
             <button
               onClick={() => setActiveTab('notes')}
-              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+              className={`px-3 py-2 text-[10px] font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'notes' 
                   ? 'text-emerald-700 border-b-2 border-emerald-600' 
                   : 'text-gray-500 hover:text-gray-700'
@@ -1261,7 +1279,7 @@ export default function CrearPlan() {
             </button>
             <button
               onClick={() => setActiveTab('indicaciones')}
-              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+              className={`px-3 py-2 text-[10px] font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'indicaciones' 
                   ? 'text-emerald-700 border-b-2 border-emerald-600' 
                   : 'text-gray-500 hover:text-gray-700'
@@ -1270,8 +1288,28 @@ export default function CrearPlan() {
               {t('consultation.tabs.indications')}
             </button>
             <button
+              onClick={() => setActiveTab('preferences')}
+              className={`px-3 py-2 text-[10px] font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'preferences'
+                  ? 'text-emerald-700 border-b-2 border-emerald-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t('consultation.tabs.preferences')}
+            </button>
+            <button
+              onClick={() => setActiveTab('conditions')}
+              className={`px-3 py-2 text-[10px] font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'conditions'
+                  ? 'text-emerald-700 border-b-2 border-emerald-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t('consultation.tabs.conditions')}
+            </button>
+            <button
               onClick={() => setActiveTab('measurements')}
-              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+              className={`px-3 py-2 text-[10px] font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'measurements'
                   ? 'text-emerald-700 border-b-2 border-emerald-600'
                   : 'text-gray-500 hover:text-gray-700'
@@ -1439,7 +1477,10 @@ export default function CrearPlan() {
                       return (
                       <div key={item.label}>
                         <div className="flex justify-between mb-1">
-                          <span className={over ? 'text-red-600 font-medium' : 'text-gray-700'}>{item.label}</span>
+                          <span className={`inline-flex items-center gap-1 ${over ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
+                            {over && <AlertCircle className="w-3 h-3 text-red-500" />}
+                            {item.label}
+                          </span>
                           <div className="tabular-nums">
                             <span className={`font-medium ${over ? 'text-red-600' : 'text-gray-800'}`}>{item.actual || 0}{item.unit}</span>
                             <span className="mx-1 text-gray-400">/</span>
@@ -1473,11 +1514,64 @@ export default function CrearPlan() {
               <div className="p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-0.5">{t('consultation.notesTab.indicationsTitle')}</p>
                 <p className="text-[10px] text-gray-400 mb-2">{t('consultation.notesTab.indicationsSubtitle')}</p>
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <IndicationAssistant
+                    lang={(patient?.language === 'pt' ? 'pt' : 'es')}
+                    conditions={patient?.medicalConditions || []}
+                    goalDir={(getGoalSelectValue() || 'maintain').split('-')[0] as 'lose' | 'gain' | 'maintain'}
+                    weightKg={editableData.weight}
+                    likedFoods={patient?.likedFoods || []}
+                    dislikedFoods={patient?.dislikedFoods || []}
+                    currentContent={indicacionesContent}
+                    onApply={(text, mode) => setIndicacionesContent(mode === 'replace' || !indicacionesContent.trim() ? text : `${indicacionesContent.trim()}\n\n${text}`)}
+                  />
+                  <IndicationLibrary
+                    lang={(patient?.language === 'pt' ? 'pt' : 'es')}
+                    currentContent={indicacionesContent}
+                    onChange={setIndicacionesContent}
+                  />
+                </div>
                 <textarea
                   value={indicacionesContent}
                   onChange={(e) => setIndicacionesContent(e.target.value)}
                   placeholder={t('consultation.notesTab.indicationsPh')}
-                  className="w-full min-h-[calc(100vh-200px)] px-2 py-1.5 text-xs text-gray-700 bg-white border border-gray-300 rounded-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 placeholder:text-gray-400"
+                  className="w-full min-h-[calc(100vh-240px)] px-2 py-1.5 text-xs text-gray-700 bg-white border border-gray-300 rounded-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 placeholder:text-gray-400"
+                />
+              </div>
+            ) : activeTab === 'preferences' ? (
+              /* Preferencias alimentarias tab */
+              <div className="p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-3">{t('consultation.setup.preferences')}</p>
+
+                <FoodPreferenceList
+                  lang={patient?.language === 'pt' ? 'pt' : 'es'}
+                  liked={patient?.likedFoods || []}
+                  disliked={patient?.dislikedFoods || []}
+                  onChange={({ liked, disliked }) => updatePrefs({ likedFoods: liked, dislikedFoods: disliked })}
+                />
+
+                {/* Preferencias específicas en texto libre */}
+                <div className="mt-5">
+                  <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">{t('consultation.setup.prefNoteLabel')}</p>
+                  <textarea
+                    value={prefNote}
+                    onChange={(e) => setPrefNote(e.target.value)}
+                    onBlur={() => { if (prefNote !== (patient?.preferencesNote || '')) updatePrefs({ preferencesNote: prefNote }); }}
+                    placeholder={t('consultation.setup.prefNotePh')}
+                    rows={3}
+                    className="w-full px-3 py-2 text-[12px] rounded-md bg-white border border-[#E0DCD4] text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+              </div>
+            ) : activeTab === 'conditions' ? (
+              /* Condiciones clínicas tab */
+              <div className="p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-0.5">{t('consultation.setup.conditions')}</p>
+                <p className="text-[10px] text-gray-400 mb-4">{t('consultation.setup.conditionsHint')}</p>
+                <ClinicalConditions
+                  lang={patient?.language === 'pt' ? 'pt' : 'es'}
+                  value={patient?.medicalConditions || []}
+                  onChange={(next) => updatePrefs({ medicalConditions: next })}
                 />
               </div>
             ) : (
@@ -1542,11 +1636,14 @@ export default function CrearPlan() {
         </div>
 
         {/* Contenido principal del plan (a la derecha) */}
-        <div className="w-3/4 p-4 flex flex-col gap-3" style={{ backgroundColor: '#FAF9F7' }}>
-          <Meals 
+        <div className="flex-1 min-w-0 p-4 flex flex-col gap-3" style={{ backgroundColor: '#FAF9F7' }}>
+          <Meals
             meals={meals}
             commonIngredients={commonIngredientsList}
             onMealsChange={handleMealsChange}
+            likedFoods={patient?.likedFoods || []}
+            dislikedFoods={patient?.dislikedFoods || []}
+            preferencesNote={patient?.preferencesNote || ''}
           />
         </div>
       </div>

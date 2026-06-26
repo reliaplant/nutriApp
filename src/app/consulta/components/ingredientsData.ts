@@ -135,6 +135,7 @@ const expandAlimento = (a: Alimento, lang: FoodLang): Ingredient | null => {
   const ig = a.indice_glucemico;
 
   return {
+    id: a.id,
     name,
     quantity: 100,
     ...rep,

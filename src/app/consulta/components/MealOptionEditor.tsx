@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useState } from 'react';
-import { ChevronDown, X, Upload, Image as ImageIcon, Sparkles, Wand2, ListPlus, FileText } from 'lucide-react';
+import { ChevronDown, X, Upload, Image as ImageIcon, Sparkles, Check, Lightbulb } from 'lucide-react';
 import { TrashCan } from '@carbon/icons-react';
 import IngredientTypeahead, { Ingredient } from './IngredientTypeahead';
 import PortionPicker from './PortionPicker';
@@ -29,6 +29,11 @@ interface MealOptionEditorProps {
   country?: string | null;
   onCountryChange?: (code: string | null) => void;
 
+  // Preferencias del paciente (opcional) — para sesgar las sugerencias y generación de IA
+  likedFoods?: string[];
+  dislikedFoods?: string[];
+  preferencesNote?: string;
+
   // Imagen (opcional)
   imageUrl?: string | null;
   imageFile?: File | null;
@@ -52,6 +57,45 @@ interface MealOptionEditorProps {
   commonIngredients: Ingredient[];
 }
 
+// Bloque seleccionable (check pastel morado) del modal de propuesta de IA.
+const AIBlock: React.FC<{ label: string; checked: boolean; onToggle: () => void; children: React.ReactNode }> = ({ label, checked, onToggle, children }) => (
+  <div
+    className={`rounded-lg p-3 transition-all ${checked ? '' : 'opacity-55'}`}
+    style={{ border: `1px solid ${checked ? '#DDD6FE' : '#E8E5DE'}`, backgroundColor: checked ? '#FAF5FF' : '#FFFFFF' }}
+  >
+    <button type="button" onClick={onToggle} className="w-full flex items-center gap-2 mb-1.5 text-left">
+      <span
+        className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors"
+        style={{ backgroundColor: checked ? '#C4B5FD' : '#FFFFFF', border: `1px solid ${checked ? '#C4B5FD' : '#D1D5DB'}` }}
+      >
+        {checked && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+      </span>
+      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: checked ? '#7C3AED' : '#9CA3AF' }}>{label}</span>
+    </button>
+    <div className="pl-6">{children}</div>
+  </div>
+);
+
+// Ejemplos de enfoque para pedir ideas a la IA, según la categoría de la comida.
+const SUGGEST_EXAMPLES: Record<string, { es: string[]; pt: string[] }> = {
+  desayuno: {
+    es: ['Desayunos dulces sanos y ricos', 'Desayunos salados altos en proteína', 'Desayunos rápidos (5 min)', 'Desayunos sin gluten'],
+    pt: ['Cafés da manhã doces e saudáveis', 'Cafés da manhã salgados ricos em proteína', 'Cafés da manhã rápidos (5 min)', 'Cafés da manhã sem glúten'],
+  },
+  almuerzo: {
+    es: ['Almuerzos ligeros', 'Altos en proteína', 'Comida típica latina', 'Bowls equilibrados'],
+    pt: ['Almoços leves', 'Ricos em proteína', 'Comida típica latina', 'Bowls equilibrados'],
+  },
+  cena: {
+    es: ['Cenas ligeras', 'Bajas en carbohidratos', 'Rápidas y caseras', 'Reconfortantes pero sanas'],
+    pt: ['Jantares leves', 'Baixos em carboidratos', 'Rápidos e caseiros', 'Reconfortantes mas saudáveis'],
+  },
+  snack: {
+    es: ['Snacks pre-entreno', 'Snacks dulces sanos', 'Snacks salados', 'Post-entreno con proteína'],
+    pt: ['Lanches pré-treino', 'Lanches doces saudáveis', 'Lanches salgados', 'Pós-treino com proteína'],
+  },
+};
+
 const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   value,
   onChange,
@@ -59,6 +103,9 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   onCategoryChange,
   country,
   onCountryChange,
+  likedFoods,
+  dislikedFoods,
+  preferencesNote,
   imageUrl,
   imageFile,
   onImageSelect,
@@ -70,13 +117,132 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   footerLeft,
   commonIngredients,
 }) => {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [catOpen, setCatOpen] = useState(false);
-  const [showAIMenu, setShowAIMenu] = useState(false);
   const [descFocused, setDescFocused] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Generación de comida con IA
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiResult, setAiResult] = useState<{ nombre: string; preparacion: string; ingredients: Ingredient[] } | null>(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [pickName, setPickName] = useState(true);
+  const [pickPrep, setPickPrep] = useState(true);
+  const [pickIngs, setPickIngs] = useState(true);
+
+  // Sugerencias de comidas (solo títulos)
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestPromptOpen, setSuggestPromptOpen] = useState(false);
+  const [suggestPrompt, setSuggestPrompt] = useState('');
+
+  // Mínimo de caracteres en la descripción para habilitar "Generar con IA".
+  const MIN_DESC = 6;
+  const descText = (value.content || '').trim();
+  const canGenerate = descText.length >= MIN_DESC;
+
   const update = (patch: Partial<MealOptionValue>) => onChange({ ...value, ...patch });
+
+  // Elige la mejor medida casera para expresar `grams` (en el idioma del paciente).
+  // Devuelve la unidad + gramos "redondeados" a un conteo limpio (0.5, 1, 1.5…); si
+  // ninguna medida encaja bien, deja gramos/ml.
+  const snapToPortion = (ing: Ingredient, grams: number): { label: string; g: number; quantity: number } | null => {
+    if (grams <= 0) return null;
+    let best: { label: string; perUnit: number; quantity: number; err: number } | null = null;
+    for (const p of getPortionsForIngredient(ing)) {
+      const parsed = parsePortion(p);
+      if (parsed.perUnit <= 0) continue;
+      const count = Math.round((grams / parsed.perUnit) * 2) / 2; // al 0.5 más cercano
+      if (count < 0.5) continue;
+      const snapped = count * parsed.perUnit;
+      const err = Math.abs(snapped - grams) / grams;
+      if (err <= 0.18 && (!best || err < best.err)) {
+        best = { label: parsed.label, perUnit: parsed.perUnit, quantity: Math.round(snapped), err };
+      }
+    }
+    return best ? { label: best.label, g: best.perUnit, quantity: best.quantity } : null;
+  };
+
+  // Resuelve los ids de la IA → ingredientes reales (con su mejor medida casera).
+  const resolveIngredients = (items: { id: string; gramos: number }[]): Ingredient[] => {
+    const byId = new Map<string, Ingredient>();
+    commonIngredients.forEach((i) => { if (i.id) byId.set(i.id, i); });
+    const resolved: Ingredient[] = [];
+    for (const it of items || []) {
+      const ing = byId.get(it.id);
+      if (!ing) continue;
+      const grams = Math.round(it.gramos);
+      const snap = snapToPortion(ing, grams);
+      resolved.push({
+        id: ing.id,
+        name: ing.name,
+        quantity: snap ? snap.quantity : grams,
+        calories: ing.calories,
+        protein: ing.protein,
+        carbs: ing.carbs,
+        fat: ing.fat,
+        icon: ing.icon,
+        portions: ing.portions,
+        baseUnit: ing.baseUnit,
+        unit: snap ? { label: snap.label, g: snap.g } : { label: ing.baseUnit === 'ml' ? 'ml' : 'g', g: 1 },
+      });
+    }
+    return resolved;
+  };
+
+  const runAI = async (descripcion?: string, kcalObjetivo?: number) => {
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const propios = commonIngredients
+        .filter((i) => i.id?.startsWith('custom:'))
+        .map((i) => ({ id: i.id as string, nombre: i.name, kcal: Math.round(i.calories || 0), p: Math.round(i.protein || 0), c: Math.round(i.carbs || 0), f: Math.round(i.fat || 0) }));
+      const res = await fetch('/api/ai/generar-comida', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descripcion, kcalObjetivo, categoria: category, propios, gustos: likedFoods, disgustos: dislikedFoods, nota: preferencesNote }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'No se pudo generar.');
+      const ingredients = resolveIngredients(data.ingredientes || []);
+      if (ingredients.length === 0) throw new Error('La IA no encontró ingredientes válidos. Intenta de nuevo.');
+      setAiResult({ nombre: data.nombre || '', preparacion: data.preparacion || '', ingredients });
+      setPickName(true); setPickPrep(true); setPickIngs(true);
+      setAiModalOpen(true);
+      return true;
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'No se pudo generar.');
+      return false;
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Aplica a la opción solo los bloques marcados.
+  const applyAISelection = () => {
+    if (!aiResult) return;
+    const patch: Partial<MealOptionValue> = {};
+    if (pickName && aiResult.nombre) patch.name = aiResult.nombre;
+    if (pickPrep && aiResult.preparacion) patch.content = aiResult.preparacion;
+    if (pickIngs && aiResult.ingredients.length) patch.ingredients = aiResult.ingredients;
+    if (Object.keys(patch).length) update(patch);
+    setAiModalOpen(false);
+  };
+
+  // Texto de cantidad+unidad para mostrar en el modal de propuesta.
+  const fmtIngQty = (ing: Ingredient): string => {
+    const q = Number(ing.quantity || 0);
+    const u = ing.unit;
+    const base = ing.baseUnit === 'ml' ? 'ml' : 'g';
+    if (u && u.label && u.g > 0 && !(u.g === 1 && (u.label === 'g' || u.label === 'ml'))) {
+      const count = +(q / u.g).toFixed(2);
+      return `${count} ${u.label}`;
+    }
+    return `${Math.round(q)} ${base}`;
+  };
+
 
   const ingredients = value.ingredients || [];
 
@@ -181,21 +347,43 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
     update({ ingredients: arr });
   };
 
-  // IA
+  // IA: arma la comida con tus ingredientes a partir de la descripción escrita.
   const generateFromAI = async () => {
-    if (!value.content) return;
+    if (!canGenerate) {
+      setAiError(`Escribe al menos ${MIN_DESC} caracteres en la descripción.`);
+      return;
+    }
+    await runAI(descText);
+  };
+
+  // IA: pide ~12 ideas de comidas (solo títulos) y abre el modal de selección.
+  const runSuggest = async (enfoque?: string) => {
+    setSuggestLoading(true);
+    setAiError('');
+    setSuggestPromptOpen(false);
     try {
-      const res = await fetch('/api/analyze-meal', {
+      const res = await fetch('/api/ai/generar-comida', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: value.content }),
+        body: JSON.stringify({ modo: 'sugerir', categoria: category, pais: country || undefined, gustos: likedFoods, disgustos: dislikedFoods, enfoque }),
       });
-      if (!res.ok) throw new Error('API error');
-      const newIngredients = await res.json();
-      update({ ingredients: newIngredients });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'No se pudieron generar ideas.');
+      const ideas: string[] = Array.isArray(data.ideas) ? data.ideas : [];
+      setSuggestions(ideas);
+      setSuggestOpen(true);
     } catch (e) {
-      console.error('AI generation failed', e);
+      setAiError(e instanceof Error ? e.message : 'No se pudieron generar ideas.');
+    } finally {
+      setSuggestLoading(false);
     }
+  };
+
+  // Al elegir una idea: la fija como descripción y genera la comida completa.
+  const pickSuggestion = async (titulo: string) => {
+    setSuggestOpen(false);
+    update({ content: titulo });
+    await runAI(titulo);
   };
 
   // Imagen
@@ -357,50 +545,38 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[10px] font-semibold uppercase tracking-wider text-[#A8A29E]">{t('consultation.editor.descLabel')}</label>
-                  <div className="relative">
+                  <div className="flex items-center gap-2">
+                    {aiError && <span className="text-[10px] text-red-600 max-w-[180px] truncate" title={aiError}>{aiError}</span>}
+                    {/* Sugerir ideas — no necesita descripción */}
                     <button
                       type="button"
-                      onClick={() => setShowAIMenu((s) => !s)}
-                      className="text-[11px] px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 font-medium text-white transition-opacity hover:opacity-90"
+                      onClick={() => { setSuggestPrompt(''); setAiError(''); setSuggestPromptOpen(true); }}
+                      disabled={suggestLoading || aiLoading}
+                      title={t('consultation.editor.aiSuggest')}
+                      className="text-[11px] px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ color: '#7C3AED', backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE' }}
+                    >
+                      {suggestLoading ? (
+                        <><span className="inline-block w-3 h-3 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin" />{t('consultation.editor.aiSuggestLoading')}</>
+                      ) : (
+                        <><Lightbulb className="w-3.5 h-3.5" />{t('consultation.editor.aiSuggest')}</>
+                      )}
+                    </button>
+                    {/* Generar con IA — requiere descripción mínima */}
+                    <button
+                      type="button"
+                      onClick={generateFromAI}
+                      disabled={aiLoading || suggestLoading || !canGenerate}
+                      title={canGenerate ? 'Arma la comida con tus ingredientes a partir de la descripción' : t('consultation.editor.aiDisabled')}
+                      className="text-[11px] px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ backgroundImage: 'linear-gradient(90deg, #8B5CF6, #7C3AED)' }}
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      {t('consultation.editor.aiGenerate')}
-                      <ChevronDown className="w-3 h-3 opacity-80" />
+                      {aiLoading ? (
+                        <><span className="inline-block w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />Generando…</>
+                      ) : (
+                        <><Sparkles className="w-3.5 h-3.5" />{t('consultation.editor.aiGenerate')}</>
+                      )}
                     </button>
-                    {showAIMenu && (
-                      <>
-                        <div className="fixed inset-0 z-40" onClick={() => setShowAIMenu(false)} />
-                        <div className="absolute right-0 mt-1 z-50 w-64 rounded-md bg-white py-1 shadow-lg" style={{ border: '1px solid #E8E5DE' }}>
-                          <div className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wider" style={{ color: '#A8A29E' }}>{t('consultation.editor.aiMenuTitle')}</div>
-                          <button
-                            type="button"
-                            onClick={() => { generateFromAI(); setShowAIMenu(false); }}
-                            disabled={!value.content}
-                            className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 text-gray-700 hover:bg-[#FAF9F7] disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            <ListPlus className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-                            {t('consultation.editor.aiCreateFromDesc')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setShowAIMenu(false); }}
-                            className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 text-gray-700 hover:bg-[#FAF9F7]"
-                          >
-                            <FileText className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-                            {t('consultation.editor.aiGenerateDesc')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setShowAIMenu(false); }}
-                            className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 text-gray-700 hover:bg-[#FAF9F7]"
-                          >
-                            <Wand2 className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-                            {t('consultation.editor.aiCreateBoth')}
-                          </button>
-                        </div>
-                      </>
-                    )}
                   </div>
                 </div>
                 {/* Al enfocar crece en su lugar (z alto) sobre el resto oscurecido. */}
@@ -606,6 +782,197 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ─── Modal de propuesta de IA ─── */}
+      {aiModalOpen && aiResult && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAiModalOpen(false)} />
+          <div className="relative bg-white rounded-md shadow-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden" style={{ border: '1px solid #E8E5DE' }}>
+            {/* Header IAstico */}
+            <div className="px-5 py-3 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid #F0EDE8', backgroundImage: 'linear-gradient(90deg, #F5F3FF, #FFFFFF)' }}>
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-md flex items-center justify-center" style={{ backgroundColor: '#EDE9FE' }}>
+                  <Sparkles className="w-4 h-4" style={{ color: '#7C3AED' }} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">Propuesta de IA</h3>
+                  <p className="text-[10px] text-gray-500 leading-tight">Elige qué importar a esta opción</p>
+                </div>
+              </div>
+              <button onClick={() => setAiModalOpen(false)} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4 text-gray-400" /></button>
+            </div>
+
+            {/* Bloques */}
+            <div className="overflow-y-auto p-4 space-y-2.5">
+              <AIBlock label="Título" checked={pickName} onToggle={() => setPickName((v) => !v)}>
+                <div className="text-[14px] font-semibold text-gray-900">{aiResult.nombre || '—'}</div>
+              </AIBlock>
+
+              <AIBlock label="Preparación (para el paciente)" checked={pickPrep} onToggle={() => setPickPrep((v) => !v)}>
+                <p className="text-[12.5px] text-gray-700 leading-relaxed whitespace-pre-line">{aiResult.preparacion || '—'}</p>
+              </AIBlock>
+
+              <AIBlock label={`Ingredientes · ${aiResult.ingredients.length}`} checked={pickIngs} onToggle={() => setPickIngs((v) => !v)}>
+                <ul className="space-y-1">
+                  {aiResult.ingredients.map((ing, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2 text-[12px]">
+                      <span className="flex items-center gap-1.5 text-gray-800 min-w-0">
+                        {ing.icon && <img src={`/icons/${ing.icon}.svg`} alt="" className="w-3.5 h-3.5 flex-shrink-0" />}
+                        <span className="truncate">{ing.name}</span>
+                      </span>
+                      <span className="text-gray-500 tabular-nums flex-shrink-0">{fmtIngQty(ing)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </AIBlock>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 flex items-center justify-between gap-2 flex-shrink-0" style={{ borderTop: '1px solid #F0EDE8', backgroundColor: '#FAFAFA' }}>
+              <span className="text-[10px] text-gray-400">Lo no marcado se descarta</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAiModalOpen(false)}
+                  className="px-3 py-1.5 text-[12px] rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={applyAISelection}
+                  disabled={!pickName && !pickPrep && !pickIngs}
+                  className="px-4 py-1.5 text-[12px] rounded font-semibold text-white inline-flex items-center gap-1.5 transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundImage: 'linear-gradient(90deg, #8B5CF6, #7C3AED)' }}
+                >
+                  <Check className="w-3.5 h-3.5" /> Aplicar selección
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal: pedir enfoque para las ideas ─── */}
+      {suggestPromptOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSuggestPromptOpen(false)} />
+          <div className="relative bg-white rounded-md shadow-2xl w-full max-w-md overflow-hidden" style={{ border: '1px solid #E8E5DE' }}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #F0EDE8', backgroundImage: 'linear-gradient(90deg, #F5F3FF, #FFFFFF)' }}>
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-md flex items-center justify-center" style={{ backgroundColor: '#EDE9FE' }}>
+                  <Lightbulb className="w-4 h-4" style={{ color: '#7C3AED' }} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">{t('consultation.editor.aiSuggestTitle')}</h3>
+                  <p className="text-[10px] text-gray-500 leading-tight">{t('consultation.editor.aiSuggestPromptHint')}</p>
+                </div>
+              </div>
+              <button onClick={() => setSuggestPromptOpen(false)} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4 text-gray-400" /></button>
+            </div>
+            <div className="p-4 space-y-3">
+              <textarea
+                value={suggestPrompt}
+                onChange={(e) => setSuggestPrompt(e.target.value)}
+                placeholder={t('consultation.editor.aiSuggestPromptPh')}
+                rows={2}
+                autoFocus
+                className="w-full px-3 py-2 text-[12px] rounded-md bg-white border border-[#E0DCD4] text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200"
+              />
+              {(SUGGEST_EXAMPLES[normalizeCategory(category)]?.[lang === 'pt' ? 'pt' : 'es'] || []).length > 0 && (
+                <div>
+                  <p className="text-[10px] text-gray-400 mb-1.5">{t('consultation.editor.aiSuggestExamples')}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(SUGGEST_EXAMPLES[normalizeCategory(category)]?.[lang === 'pt' ? 'pt' : 'es'] || []).map((ex) => (
+                      <button
+                        key={ex}
+                        type="button"
+                        onClick={() => setSuggestPrompt(ex)}
+                        className="text-[11px] px-2 py-1 rounded-full text-gray-600 bg-white hover:border-purple-300 hover:text-purple-700 transition-colors"
+                        style={{ border: '1px dashed #D6D3CD' }}
+                      >
+                        {ex}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {aiError && <p className="text-[11px] text-red-600">{aiError}</p>}
+            </div>
+            <div className="px-5 py-3 flex items-center justify-end gap-2" style={{ borderTop: '1px solid #F0EDE8', backgroundColor: '#FAFAFA' }}>
+              <button type="button" onClick={() => setSuggestPromptOpen(false)} className="px-3 py-1.5 text-[12px] rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button
+                type="button"
+                onClick={() => runSuggest(suggestPrompt.trim() || undefined)}
+                disabled={suggestLoading}
+                className="px-4 py-1.5 text-[12px] rounded font-semibold text-white inline-flex items-center gap-1.5 transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundImage: 'linear-gradient(90deg, #8B5CF6, #7C3AED)' }}
+              >
+                {suggestLoading ? <><span className="inline-block w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />{t('consultation.editor.aiSuggestLoading')}</> : <><Lightbulb className="w-3.5 h-3.5" />{t('consultation.editor.aiSuggest')}</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal de sugerencias (ideas, solo títulos) ─── */}
+      {suggestOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSuggestOpen(false)} />
+          <div className="relative bg-white rounded-md shadow-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden" style={{ border: '1px solid #E8E5DE' }}>
+            <div className="px-5 py-3 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid #F0EDE8', backgroundImage: 'linear-gradient(90deg, #F5F3FF, #FFFFFF)' }}>
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-md flex items-center justify-center" style={{ backgroundColor: '#EDE9FE' }}>
+                  <Lightbulb className="w-4 h-4" style={{ color: '#7C3AED' }} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">{t('consultation.editor.aiSuggestTitle')}</h3>
+                  <p className="text-[10px] text-gray-500 leading-tight">{t('consultation.editor.aiSuggestSubtitle')}</p>
+                </div>
+              </div>
+              <button onClick={() => setSuggestOpen(false)} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4 text-gray-400" /></button>
+            </div>
+
+            <div className="overflow-y-auto p-4">
+              {suggestions.length === 0 ? (
+                <p className="text-[12.5px] text-gray-500 text-center py-6">{t('consultation.editor.aiSuggestEmpty')}</p>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => pickSuggestion(s)}
+                      className="text-left text-[12.5px] text-gray-800 rounded-lg px-3 py-2.5 transition-colors hover:bg-purple-50 hover:border-purple-200 inline-flex items-center gap-2"
+                      style={{ border: '1px solid #E8E5DE', backgroundColor: '#FFFFFF' }}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A78BFA' }} />
+                      <span>{s}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 flex items-center justify-between gap-2 flex-shrink-0" style={{ borderTop: '1px solid #F0EDE8', backgroundColor: '#FAFAFA' }}>
+              <span className="text-[10px] text-gray-400">Elige una idea y la armo con tus ingredientes</span>
+              <button
+                type="button"
+                onClick={() => runSuggest(suggestPrompt.trim() || undefined)}
+                disabled={suggestLoading}
+                className="px-3 py-1.5 text-[12px] rounded inline-flex items-center gap-1.5 font-medium transition-colors disabled:opacity-50"
+                style={{ color: '#7C3AED', backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE' }}
+              >
+                {suggestLoading ? (
+                  <><span className="inline-block w-3 h-3 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin" />{t('consultation.editor.aiSuggestLoading')}</>
+                ) : (
+                  <><Lightbulb className="w-3.5 h-3.5" />Otras ideas</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

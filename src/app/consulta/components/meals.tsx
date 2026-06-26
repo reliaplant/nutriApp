@@ -77,6 +77,9 @@ interface MealItemProps {
   commonIngredients: any[];
   handleInstructionsChange: (mealIndex: number, optionIndex: number, instructions: string) => void;
   onToggleActive: () => void;
+  likedFoods?: string[];
+  dislikedFoods?: string[];
+  preferencesNote?: string;
 }
 
 const MealItem: React.FC<MealItemProps> = ({ 
@@ -98,7 +101,10 @@ const MealItem: React.FC<MealItemProps> = ({
   removeMeal,
   commonIngredients,
   handleInstructionsChange,
-  onToggleActive
+  onToggleActive,
+  likedFoods,
+  dislikedFoods,
+  preferencesNote
 }) => {
   const { t } = useTranslation();
   // Estados del componente
@@ -152,7 +158,7 @@ const MealItem: React.FC<MealItemProps> = ({
   const catIcon = categoryIcons[category];
 
   return (
-    <div className={`group/meal rounded-md overflow-hidden transition-all duration-300 ease-in-out ${meal.isActive === false ? 'opacity-60' : 'bg-white'}`} style={{ border: '1px solid #E8E5DE', backgroundColor: meal.isActive === false ? '#F4F2EE' : undefined }}>
+    <div className={`group/meal rounded-md overflow-hidden transition-all duration-300 ease-in-out ${meal.isActive === false ? 'opacity-60' : 'bg-white'}`} style={{ border: '1px solid #E8E5DE', backgroundColor: meal.isActive === false ? '#F4F2EE' : undefined, boxShadow: meal.isActive === false ? undefined : '0 1px 3px rgba(40,37,32,0.05), 0 4px 12px -8px rgba(40,37,32,0.08)' }}>
       {/* Header */}
       <div className={`px-3 py-2 flex items-center justify-between`} style={meal.isActive === false ? undefined : { borderBottom: '1px solid #F0EDE8' }}>
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -293,7 +299,7 @@ const MealItem: React.FC<MealItemProps> = ({
             const hasContent = option.ingredients.length > 0 || !!option.content;
 
             return (
-              <div key={optionIndex} className="rounded-md transition-all bg-white" style={{ border: '1px solid #E8E5DE' }}>
+              <div key={optionIndex} className="rounded-md transition-all bg-white" style={{ border: '1px solid #ECE9E3', boxShadow: '0 1px 2px rgba(40,37,32,0.04)' }}>
                 {/* Option header — fila compacta con macros visibles */}
                 <div
                   className={`px-2.5 py-1.5 flex items-center justify-between cursor-pointer transition-colors group/option`}
@@ -434,6 +440,9 @@ const MealItem: React.FC<MealItemProps> = ({
                       onMealsChange(updatedMeals);
                     }}
                     category={category}
+                    likedFoods={likedFoods}
+                    dislikedFoods={dislikedFoods}
+                    preferencesNote={preferencesNote}
                     imageUrl={option.imageUrl ?? null}
                     onImageSelect={async (file) => {
                       if (!file) return;
@@ -553,13 +562,19 @@ interface MealsProps {
   meals: Meal[];
   commonIngredients: any[];
   onMealsChange: (meals: Meal[]) => void;
+  likedFoods?: string[];
+  dislikedFoods?: string[];
+  preferencesNote?: string;
 }
 
 // Componente principal Meals
 const Meals: React.FC<MealsProps> = ({
   meals,
   commonIngredients,
-  onMealsChange
+  onMealsChange,
+  likedFoods,
+  dislikedFoods,
+  preferencesNote
 }) => {
   const { t } = useTranslation();
   // Eliminamos el useEffect que crea comidas por defecto
@@ -838,6 +853,9 @@ const Meals: React.FC<MealsProps> = ({
           handleIngredientChange={handleIngredientChange}
           removeMeal={removeMeal}
           commonIngredients={commonIngredients}
+          likedFoods={likedFoods}
+          dislikedFoods={dislikedFoods}
+          preferencesNote={preferencesNote}
           handleInstructionsChange={handleInstructionsChange}
           onToggleActive={() => {
             const updatedMeals = [...meals];

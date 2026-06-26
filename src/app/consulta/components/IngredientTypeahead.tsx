@@ -20,6 +20,8 @@ export interface IngredientPrep {
 }
 
 export interface Ingredient {
+  /** id estable del alimento en la BDD (para matchear con resultados de IA). */
+  id?: string;
   name: string;
   quantity: number;
   calories: number;
