@@ -10,6 +10,7 @@ import moment from 'moment';
 import 'moment/locale/pt-br';
 import 'moment/locale/es';
 import { useTranslation } from '@/app/shared/useTranslation';
+import { t as tRaw } from '@/app/shared/i18n';
 
 interface PrintNutritionPlanProps {
   patient: Patient | null;
@@ -93,6 +94,10 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
     setLoading(true);
     setMenuOpen(false);
     try {
+      // El PDF es para el paciente → todo en SU idioma (no el de la app).
+      const patientLang: 'es' | 'pt' = patient?.language === 'pt' ? 'pt' : 'es';
+      const t = (key: string) => tRaw(key, patientLang);
+      const lang = patientLang;
       moment.locale(lang === 'pt' ? 'pt-br' : 'es');
 
       const activeMeals = sortMealsByTime(meals).filter(m => m.isActive !== false && m.options && m.options.length > 0);
@@ -447,9 +452,10 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
               if (iconData) { try { doc.addImage(iconData, 'PNG', margin + 2.5, rowTop + (ROW_H - 5) / 2, 5, 5); nx = margin + 9.5; } catch { /* */ } }
               doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); setColor(COLORS.text);
               const maxNameW = colDivX - nx - 2;
-              let name = ing.name;
+              const fullName = (ing as { displayName?: string }).displayName || ing.name;
+              let name = fullName;
               while (doc.getTextWidth(name) > maxNameW && name.length > 4) name = name.slice(0, -2);
-              if (name !== ing.name) name = name.trimEnd() + '…';
+              if (name !== fullName) name = name.trimEnd() + '…';
               doc.text(name, nx, cy2);
               doc.setFontSize(9); setColor(COLORS.textMuted);
               if (withNutrition) {

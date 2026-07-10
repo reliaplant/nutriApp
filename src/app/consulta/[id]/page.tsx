@@ -1645,6 +1645,7 @@ export default function CrearPlan() {
             likedFoods={patient?.likedFoods || []}
             dislikedFoods={patient?.dislikedFoods || []}
             preferencesNote={patient?.preferencesNote || ''}
+            foodLang={patient?.language || 'es'}
           />
         </div>
       </div>

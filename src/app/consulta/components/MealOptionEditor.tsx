@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useState } from 'react';
-import { ChevronDown, X, Upload, Image as ImageIcon, Sparkles, Check, Lightbulb } from 'lucide-react';
+import { ChevronDown, X, Upload, Image as ImageIcon, Sparkles, Check, Lightbulb, RotateCcw } from 'lucide-react';
 import { TrashCan } from '@carbon/icons-react';
 import IngredientTypeahead, { Ingredient } from './IngredientTypeahead';
 import PortionPicker from './PortionPicker';
@@ -33,6 +33,8 @@ interface MealOptionEditorProps {
   likedFoods?: string[];
   dislikedFoods?: string[];
   preferencesNote?: string;
+  // Idioma del paciente (para que la IA escriba nombre/preparación en ese idioma)
+  foodLang?: 'es' | 'pt' | 'en';
 
   // Imagen (opcional)
   imageUrl?: string | null;
@@ -106,6 +108,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   likedFoods,
   dislikedFoods,
   preferencesNote,
+  foodLang,
   imageUrl,
   imageFile,
   onImageSelect,
@@ -118,8 +121,12 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
   commonIngredients,
 }) => {
   const { t, lang } = useTranslation();
+  // Idioma en el que la IA debe escribir (idioma del paciente; cae al de la app).
+  const aiLangCode = foodLang || (lang === 'pt' ? 'pt' : 'es');
+  const aiIdioma = aiLangCode === 'pt' ? 'portugués' : aiLangCode === 'en' ? 'inglés' : 'español';
   const [catOpen, setCatOpen] = useState(false);
   const [descFocused, setDescFocused] = useState(false);
+  const [nameEdit, setNameEdit] = useState<{ idx: number; value: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Generación de comida con IA
@@ -202,7 +209,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
       const res = await fetch('/api/ai/generar-comida', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ descripcion, kcalObjetivo, categoria: category, propios, gustos: likedFoods, disgustos: dislikedFoods, nota: preferencesNote }),
+        body: JSON.stringify({ descripcion, kcalObjetivo, categoria: category, propios, gustos: likedFoods, disgustos: dislikedFoods, nota: preferencesNote, idioma: aiIdioma }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'No se pudo generar.');
@@ -328,6 +335,22 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
     update({ ingredients: arr });
   };
 
+  // Renombrar solo el NOMBRE VISUAL del ingrediente (no toca macros ni id).
+  const origName = (ing: Ingredient) => ing.baseName ?? ing.name;
+  const shownName = (ing: Ingredient) => ing.displayName ?? origName(ing);
+  const setIngredientDisplayName = (idx: number, name: string) => {
+    const arr = [...ingredients];
+    const trimmed = name.trim();
+    const orig = origName(arr[idx]);
+    arr[idx] = { ...arr[idx], displayName: (!trimmed || trimmed === orig) ? undefined : trimmed };
+    update({ ingredients: arr });
+  };
+  const resetIngredientName = (idx: number) => {
+    const arr = [...ingredients];
+    arr[idx] = { ...arr[idx], displayName: undefined };
+    update({ ingredients: arr });
+  };
+
   // Cambiar el modo de preparación de un ingrediente:
   // intercambia macros + portions y conserva los gramos actuales.
   const setIngredientPrep = (idx: number, prepKey: string) => {
@@ -365,7 +388,7 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
       const res = await fetch('/api/ai/generar-comida', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modo: 'sugerir', categoria: category, pais: country || undefined, gustos: likedFoods, disgustos: dislikedFoods, enfoque }),
+        body: JSON.stringify({ modo: 'sugerir', categoria: category, pais: country || undefined, gustos: likedFoods, disgustos: dislikedFoods, enfoque, idioma: aiIdioma }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'No se pudieron generar ideas.');
@@ -647,8 +670,39 @@ const MealOptionEditor: React.FC<MealOptionEditorProps> = ({
                         ) : (
                           <div className="w-5 h-5 flex-shrink-0" />
                         )}
-                        <div className="flex-1 min-w-0 text-xs font-medium truncate text-gray-800">
-                          {ing.baseName ?? ing.name}
+                        <div className="flex-1 min-w-0 flex items-center gap-1">
+                          {nameEdit?.idx === idx ? (
+                            <input
+                              type="text"
+                              autoFocus
+                              value={nameEdit.value}
+                              onChange={(e) => setNameEdit({ idx, value: e.target.value })}
+                              onBlur={() => { setIngredientDisplayName(idx, nameEdit.value); setNameEdit(null); }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); setIngredientDisplayName(idx, nameEdit.value); setNameEdit(null); }
+                                if (e.key === 'Escape') setNameEdit(null);
+                              }}
+                              className="min-w-0 flex-1 text-xs font-medium px-1 py-0.5 rounded border border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-200 text-gray-800"
+                            />
+                          ) : (
+                            <span
+                              className="text-xs font-medium truncate text-gray-800 cursor-text"
+                              onDoubleClick={() => setNameEdit({ idx, value: shownName(ing) })}
+                              title={t('consultation.editor.renameHint')}
+                            >
+                              {shownName(ing)}
+                            </span>
+                          )}
+                          {ing.displayName && nameEdit?.idx !== idx && (
+                            <button
+                              type="button"
+                              onClick={() => resetIngredientName(idx)}
+                              title={t('consultation.editor.resetName')}
+                              className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 flex-shrink-0"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                         {ing.preparations && ing.preparations.length > 1 && (
                           <PrepSelector

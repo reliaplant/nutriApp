@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     if (Array.isArray(body.gustos) && body.gustos.length) ctx.push(`Al paciente le GUSTAN mucho estos alimentos (priorízalos): ${body.gustos.slice(0, 40).join(', ')}.`);
     if (Array.isArray(body.disgustos) && body.disgustos.length) ctx.push(`Al paciente NO le gustan estos alimentos (EVÍTALOS por completo): ${body.disgustos.slice(0, 40).join(', ')}.`);
     if (body.nota?.trim()) ctx.push(`Otras preferencias del paciente a respetar: ${body.nota.trim().slice(0, 400)}.`);
-    if (body.idioma) ctx.push(`Idioma de los títulos: ${body.idioma}.`);
+    if (body.idioma) ctx.push(`IDIOMA: escribe TODOS los títulos en ${body.idioma}. No mezcles idiomas.`);
     try {
       const sg = await anthropicClient.messages.create({
         model: modelId,
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
   partes.push('IMPORTANTE: respeta fielmente el plato solicitado. Usa sus ingredientes característicos aunque coincidan con lo que al paciente "no le gusta" (p. ej. una boloñesa lleva carne de res: NO la cambies por pollo). Tampoco agregues alimentos ajenos al plato solo porque le gusten al paciente.');
   if (Array.isArray(body.disgustos) && body.disgustos.length) partes.push(`Solo como guía secundaria, si el plato lo permite evita estos alimentos en los acompañamientos (nunca en los ingredientes que definen el plato): ${body.disgustos.slice(0, 40).join(', ')}.`);
   if (body.nota?.trim()) partes.push(`Considera estas notas del paciente (p. ej. alergias) sin alterar el plato pedido: ${body.nota.trim().slice(0, 400)}.`);
-  if (body.idioma) partes.push(`Nombra la comida en idioma: ${body.idioma}.`);
+  if (body.idioma) partes.push(`IDIOMA DE SALIDA: escribe el NOMBRE de la comida y la PREPARACIÓN completos en ${body.idioma}. No mezcles idiomas.`);
   if (Array.isArray(body.propios) && body.propios.length > 0) {
     const lista = body.propios.slice(0, 200).map((i) => `${i.id}|${i.nombre}|${i.kcal}|${i.p}|${i.c}|${i.f}`).join('\n');
     partes.push(`Ingredientes propios del usuario que también puedes usar (id|nombre|kcal|prot|carb|grasa por 100 g):\n${lista}`);

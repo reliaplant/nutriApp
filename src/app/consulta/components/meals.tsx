@@ -80,6 +80,7 @@ interface MealItemProps {
   likedFoods?: string[];
   dislikedFoods?: string[];
   preferencesNote?: string;
+  foodLang?: 'es' | 'pt' | 'en';
 }
 
 const MealItem: React.FC<MealItemProps> = ({ 
@@ -104,7 +105,8 @@ const MealItem: React.FC<MealItemProps> = ({
   onToggleActive,
   likedFoods,
   dislikedFoods,
-  preferencesNote
+  preferencesNote,
+  foodLang
 }) => {
   const { t } = useTranslation();
   // Estados del componente
@@ -392,7 +394,7 @@ const MealItem: React.FC<MealItemProps> = ({
                                 {ingredient.icon && (
                                   <img src={`/icons/${ingredient.icon}.svg`} alt="" className="w-4 h-4 flex-shrink-0" />
                                 )}
-                                <span className="truncate text-gray-700">{ingredient.name}</span>
+                                <span className="truncate text-gray-700">{ingredient.displayName ?? ingredient.name}</span>
                               </div>
                               <div className="flex items-center gap-3 flex-shrink-0 text-gray-500 tabular-nums">
                                 <span>{ingredient.quantity}g</span>
@@ -443,6 +445,7 @@ const MealItem: React.FC<MealItemProps> = ({
                     likedFoods={likedFoods}
                     dislikedFoods={dislikedFoods}
                     preferencesNote={preferencesNote}
+                    foodLang={foodLang}
                     imageUrl={option.imageUrl ?? null}
                     onImageSelect={async (file) => {
                       if (!file) return;
@@ -565,6 +568,7 @@ interface MealsProps {
   likedFoods?: string[];
   dislikedFoods?: string[];
   preferencesNote?: string;
+  foodLang?: 'es' | 'pt' | 'en';
 }
 
 // Componente principal Meals
@@ -574,7 +578,8 @@ const Meals: React.FC<MealsProps> = ({
   onMealsChange,
   likedFoods,
   dislikedFoods,
-  preferencesNote
+  preferencesNote,
+  foodLang
 }) => {
   const { t } = useTranslation();
   // Eliminamos el useEffect que crea comidas por defecto
@@ -856,6 +861,7 @@ const Meals: React.FC<MealsProps> = ({
           likedFoods={likedFoods}
           dislikedFoods={dislikedFoods}
           preferencesNote={preferencesNote}
+          foodLang={foodLang}
           handleInstructionsChange={handleInstructionsChange}
           onToggleActive={() => {
             const updatedMeals = [...meals];

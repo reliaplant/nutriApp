@@ -35,6 +35,8 @@ export interface Ingredient {
   preparations?: IngredientPrep[];
   /** Nombre base del concepto (sin sufijo de preparación). */
   baseName?: string;
+  /** Nombre visual personalizado (solo display; no cambia macros ni id). */
+  displayName?: string;
   /** Clave de la preparación actualmente seleccionada. */
   prepKey?: string;
   /** Unidad de medida elegida para la cantidad (g por defecto). quantity siempre en gramos. */
