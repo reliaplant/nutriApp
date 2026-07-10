@@ -86,9 +86,8 @@ const IndicationLibrary: React.FC<Props> = ({ lang, currentContent, onChange }) 
   };
 
   const openSave = () => {
-    const content = currentContent.trim();
-    if (!content) return;
-    setSaveName(content.split('\n')[0].replace(/[:.]+$/, '').slice(0, 60));
+    if (!currentContent.trim()) return;
+    setSaveName('');
     setSaveOpen(true);
   };
   const doSave = async () => {

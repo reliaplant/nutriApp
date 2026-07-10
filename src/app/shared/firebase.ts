@@ -966,6 +966,22 @@ export const savedIndicationService = {
     return docRef.id;
   },
 
+  async updateSavedIndication(id: string, data: { title?: string; content?: string }): Promise<void> {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) throw new Error("Debes iniciar sesión para editar indicaciones");
+    const ref = doc(db, "savedIndications", id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error("Indicación no encontrada");
+    const existing = snap.data() as SavedIndication;
+    if (existing.nutritionistId !== currentUser.uid) {
+      throw new Error("No tienes permiso para editar esta indicación");
+    }
+    const patch: { title?: string; content?: string } = {};
+    if (typeof data.title === 'string') patch.title = data.title.trim();
+    if (typeof data.content === 'string') patch.content = data.content;
+    await updateDoc(ref, patch);
+  },
+
   async deleteSavedIndication(id: string): Promise<void> {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) throw new Error("Debes iniciar sesión para eliminar indicaciones");

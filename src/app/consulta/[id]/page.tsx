@@ -759,6 +759,7 @@ export default function CrearPlan() {
             totalNutrition={totalNutrition}
             notes={notasContent}
             indicaciones={indicacionesContent}
+            measurements={measurements}
             targetCalories={theoreticalValues.dailyCalories}
             nutritionistName={userData?.displayName || 'Nutricionista'}
             nutritionistId={userData?.professionalId || ''}

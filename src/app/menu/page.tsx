@@ -8,14 +8,15 @@ import { authService } from '@/app/shared/firebase';
 import { useAuth, hasAdminAccess } from '@/app/shared/AuthContext';
 import { useTranslation } from '@/app/shared/useTranslation';
 import LanguageSwitcher from '@/app/shared/LanguageSwitcher';
-import { Users, Calendar, UtensilsCrossed, Carrot, User, LogOut, ClipboardList } from 'lucide-react';
+import { User, LogOut } from 'lucide-react';
 
 const navItemsBase = [
-  { href: '/pacientes',     key: 'patients',      icon: <Users className="h-4 w-4" strokeWidth={1.75} />,           matchPaths: ['/pacientes', '/detalle-paciente', '/consulta', '/antropometria'] },
-  { href: '/calendario',    key: 'calendar',      icon: <Calendar className="h-4 w-4" strokeWidth={1.75} />,        matchPaths: ['/calendario'] },
-  { href: '/comidas',       key: 'meals',         icon: <UtensilsCrossed className="h-4 w-4" strokeWidth={1.75} />, matchPaths: ['/comidas'] },
-  { href: '/planes',        key: 'plans',         icon: <ClipboardList className="h-4 w-4" strokeWidth={1.75} />,   matchPaths: ['/planes'] },
-  { href: '/ingredientes',  key: 'ingredients',   icon: <Carrot className="h-4 w-4" strokeWidth={1.75} />,          matchPaths: ['/ingredientes'] },
+  { href: '/pacientes',     key: 'patients',      iconFile: 'nav_pacientes',    matchPaths: ['/pacientes', '/detalle-paciente', '/consulta', '/antropometria'] },
+  { href: '/calendario',    key: 'calendar',      iconFile: 'nav_calendario',   matchPaths: ['/calendario'] },
+  { href: '/planes',        key: 'plans',         iconFile: 'nav_planes',       matchPaths: ['/planes'] },
+  { href: '/indicaciones',  key: 'indications',   iconFile: 'nav_indicaciones', matchPaths: ['/indicaciones'] },
+  { href: '/comidas',       key: 'meals',         iconFile: 'nav_comidas',      matchPaths: ['/comidas'] },
+  { href: '/ingredientes',  key: 'ingredients',   iconFile: 'nav_ingredientes', matchPaths: ['/ingredientes'] },
 ];
 
 const MenuPage = () => {
@@ -92,18 +93,19 @@ const MenuPage = () => {
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`relative flex items-center gap-1.5 px-3 py-3 text-[12px] font-medium transition-colors duration-150 ${
-                        active
-                          ? 'text-emerald-700'
-                          : 'text-gray-500 hover:text-gray-900'
+                      className={`group relative flex items-center gap-1.5 px-3 py-3 text-[12px] font-medium transition-colors duration-150 ${
+                        active ? 'text-emerald-700' : 'text-gray-500 hover:text-gray-900'
                       }`}
                     >
-                      <span className={active ? 'text-emerald-700' : 'text-gray-400'}>
-                        {item.icon}
-                      </span>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/icons/${item.iconFile}.svg`}
+                        alt=""
+                        className={`h-[18px] w-[18px] object-contain transition duration-150 ${active ? '' : 'grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100'}`}
+                      />
                       {item.label}
                       {active && (
-                        <span className="absolute left-2 right-2 -bottom-px h-[2px] bg-emerald-600 rounded-full" />
+                        <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-emerald-600" />
                       )}
                     </Link>
                   );
@@ -233,9 +235,12 @@ const MenuPage = () => {
                       : 'text-gray-500 hover:text-gray-800'
                   }`}
                 >
-                  <span className={active ? 'text-emerald-700' : 'text-gray-400'}>
-                    {item.icon}
-                  </span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/icons/${item.iconFile}.svg`}
+                    alt=""
+                    className={`h-[18px] w-[18px] object-contain transition ${active ? '' : 'grayscale opacity-50'}`}
+                  />
                   {item.label}
                 </Link>
               );

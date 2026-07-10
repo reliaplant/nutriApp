@@ -18,6 +18,7 @@ interface PrintNutritionPlanProps {
   totalNutrition: { calories: number; protein: number; carbs: number; fat: number };
   notes: string;
   indicaciones?: string;
+  measurements?: { waist?: number; hip?: number; neck?: number; tricipital?: number; subescapular?: number; suprailiaco?: number; arm?: number; calf?: number; wrist?: number };
   targetCalories?: number;
   nutritionistName?: string;
   nutritionistId?: string;
@@ -53,7 +54,7 @@ const COLORS = {
 };
 
 const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
-  patient, consultation, meals, indicaciones, targetCalories,
+  patient, consultation, meals, indicaciones, measurements, targetCalories,
   nutritionistName = "Nutricionista", nutritionistId = "",
   nutritionistLogoUrl, nutritionistSignatureUrl, nutritionistTextSignature, nutritionistUseRealSignature,
   nutritionistSignatureFont, nutritionistSpecialization, nutritionistPhone, nutritionistEmail,
@@ -62,7 +63,6 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
   const { t, lang } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [includeNutrition, setIncludeNutrition] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -183,114 +183,187 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       const newPage = () => { addFooter(); doc.addPage(); addHeader(); };
       const ensure = (space: number) => { if (yPos + space > pageHeight - 18) newPage(); };
 
-      // ─────────────── PORTADA (documento clínico) ───────────────
-      // — Membrete: logo + profesional (izq), contacto (der) —
-      let lhx = margin;
-      if (logoData) { try { doc.addImage(logoData, 'PNG', margin, 16, 14, 14); lhx = margin + 18; } catch { /* */ } }
-      doc.setFont("helvetica", "bold"); doc.setFontSize(13); setColor(COLORS.text);
-      doc.text(nutritionistName, lhx, 22);
-      let lyL = 27.5;
-      if (nutritionistSpecialization) { doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); setColor(COLORS.textMuted); doc.text(nutritionistSpecialization, lhx, lyL); lyL += 4; }
-      if (nutritionistId) { doc.setFont("helvetica", "normal"); doc.setFontSize(8); setColor(COLORS.textLight); doc.text(`${t('consultation.pdf.license')} ${nutritionistId}`, lhx, lyL); }
-
-      // Contacto a la derecha (varias líneas)
-      const contactLines: string[] = [];
-      if (nutritionistPhone) contactLines.push(nutritionistPhone);
-      if (nutritionistEmail) contactLines.push(nutritionistEmail);
-      if (nutritionistWebsite) contactLines.push(nutritionistWebsite.replace(/^https?:\/\//, ''));
-      if (nutritionistAddress) contactLines.push(nutritionistAddress);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); setColor(COLORS.textMuted);
-      let lyR = 19.5;
-      contactLines.slice(0, 4).forEach((line) => { doc.text(line, pageWidth - margin, lyR, { align: 'right' }); lyR += 4.2; });
-
-      // Regla del membrete
-      setDraw(COLORS.text); doc.setLineWidth(0.6); doc.line(margin, 40, pageWidth - margin, 40);
-
-      // — Título del documento (alineado a la izquierda, formal) —
-      doc.setFont("helvetica", "bold"); doc.setFontSize(8); setColor(COLORS.textMuted); charSpace(2.6);
-      doc.text(t('consultation.pdf.subtitle').toUpperCase(), margin, 60);
-      charSpace(0);
-      doc.setFont("helvetica", "bold"); doc.setFontSize(22); setColor(COLORS.text);
-      doc.text(patient?.name || t('consultation.pdf.noName'), margin, 71);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(9); setColor(COLORS.textMuted);
-      doc.text(`${t('consultation.pdf.date')}: ${dateStr}`, pageWidth - margin, 71, { align: 'right' });
-
-      // — Ficha del paciente (tabla con bordes) —
-      const dataRows: { label: string; value: string }[] = [
-        { label: t('consultation.pdf.sex'), value: patient?.gender === 'male' ? t('consultation.pdf.male') : patient?.gender === 'female' ? t('consultation.pdf.female') : '—' },
-        { label: t('consultation.pdf.age'), value: age !== null ? `${age} ${t('consultation.pdf.years')}` : '—' },
-        { label: t('consultation.pdf.height'), value: patient?.height ? `${patient.height} cm` : '—' },
-        { label: t('consultation.pdf.weight'), value: patient?.currentWeight ? `${patient.currentWeight} kg` : '—' },
-        { label: t('consultation.pdf.targetWeight'), value: patient?.targetWeight ? `${patient.targetWeight} kg` : '—' },
-      ];
-      if (withNutrition && targetCalories) dataRows.push({ label: t('consultation.pdf.goal'), value: `${targetCalories} ${t('consultation.pdf.kcalDay')}` });
-
-      {
-        const gridY = 80;
-        const cols = 3;
-        const rowsN = Math.ceil(dataRows.length / cols);
-        const cellW = contentWidth / cols;
-        const cellH = 14;
-        const titleH = 8;
+      // Tabla etiqueta/valor con banda de título (reutilizable: ficha, medidas…).
+      // Tabla clínica continua (sin espacios entre secciones).
+      const T_CELL_H = 10.5;       // alto de celda de dato
+      const T_BAND_H = 6.6;        // alto de banda de sección
+      // Banda de sección (fila full-width con fondo) — pegada a lo anterior.
+      const tBand = (title: string) => {
+        ensure(T_BAND_H + T_CELL_H);
         setFill(COLORS.bgMedium); setDraw(COLORS.border); doc.setLineWidth(0.3);
-        doc.rect(margin, gridY, contentWidth, titleH, 'FD');
-        doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); setColor(COLORS.textMuted); charSpace(0.8);
-        doc.text(t('consultation.pdf.patientData').toUpperCase(), margin + 4, gridY + 5.4);
-        charSpace(0);
-        const cellsTop = gridY + titleH;
+        doc.rect(margin, yPos, contentWidth, T_BAND_H, 'FD');
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7); setColor(COLORS.textMuted); charSpace(0.8);
+        doc.text(title.toUpperCase(), margin + 4, yPos + 4.6); charSpace(0);
+        yPos += T_BAND_H;
+      };
+      // Filas de celdas etiqueta/valor (3 columnas) pegadas.
+      const tCells = (rows: { label: string; value: string }[], cols = 3) => {
+        const rowsN = Math.ceil(rows.length / cols);
+        const cellW = contentWidth / cols;
         for (let idx = 0; idx < rowsN * cols; idx++) {
           const col = idx % cols, row = Math.floor(idx / cols);
-          const x = margin + col * cellW, y = cellsTop + row * cellH;
-          setDraw(COLORS.border); doc.setLineWidth(0.3); doc.rect(x, y, cellW, cellH, 'S');
-          const d = dataRows[idx];
+          const x = margin + col * cellW, y = yPos + row * T_CELL_H;
+          setDraw(COLORS.border); doc.setLineWidth(0.3); doc.rect(x, y, cellW, T_CELL_H, 'S');
+          const d = rows[idx];
           if (d) {
-            doc.setFont("helvetica", "bold"); doc.setFontSize(6.6); setColor(COLORS.textLight); charSpace(0.6);
-            doc.text(d.label.toUpperCase(), x + 5, y + 5.5);
-            charSpace(0);
-            doc.setFont("helvetica", "bold"); doc.setFontSize(11.5); setColor(COLORS.text);
-            doc.text(d.value, x + 5, y + 11);
+            doc.setFont("helvetica", "bold"); doc.setFontSize(6); setColor(COLORS.textLight); charSpace(0.4);
+            doc.text(d.label.toUpperCase(), x + 4, y + 4); charSpace(0);
+            doc.setFont("helvetica", "bold"); doc.setFontSize(10); setColor(COLORS.text);
+            doc.text(d.value, x + 4, y + 8.6);
           }
         }
-      }
+        yPos += rowsN * T_CELL_H;
+      };
+      // Fila de ancho completo (etiqueta + valor, multi-línea) pegada.
+      const tField = (label: string, value: string) => {
+        doc.setFont("helvetica", "normal"); doc.setFontSize(9); setColor(COLORS.text);
+        const valLines = doc.splitTextToSize(value || '—', contentWidth - 36);
+        const h = Math.max(T_CELL_H, 3.5 + valLines.length * 4.1);
+        ensure(h);
+        setDraw(COLORS.border); doc.setLineWidth(0.3); doc.rect(margin, yPos, contentWidth, h, 'S');
+        doc.setFont("helvetica", "bold"); doc.setFontSize(6); setColor(COLORS.textLight); charSpace(0.4);
+        doc.text(label.toUpperCase(), margin + 4, yPos + 5.5); charSpace(0);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(9); setColor(COLORS.text);
+        let vy = yPos + 5;
+        valLines.forEach((ln: string) => { doc.text(ln, margin + 33, vy); vy += 4.1; });
+        yPos += h;
+      };
 
-      // — Firma del profesional (sobre el pie, a la derecha; sin rayita ni nombre repetido) —
+      // ─────────────── PORTADA — carta formal del plan ───────────────
+      setFill(COLORS.primary); doc.rect(0, 0, pageWidth, 1.5, 'F');
+
+      // Encabezado superior: profesional · matrícula · referencia + regla
       {
-        const sigCx = pageWidth - margin - 28;
-        const sigBaseY = pageHeight - 34;
-        if (useRealSig && signatureData) {
-          try { doc.addImage(signatureData, 'PNG', sigCx - 26, sigBaseY - 18, 52, 20); } catch { /* */ }
-        } else if (digitalSig) {
-          const drawW = Math.min(60, (digitalSig.w / digitalSig.h) * 18);
-          const drawH = drawW * (digitalSig.h / digitalSig.w);
-          try { doc.addImage(digitalSig.data, 'PNG', sigCx - drawW / 2, sigBaseY - drawH, drawW, drawH); } catch { /* */ }
-        }
+        const ref = `${t('consultation.pdf.fileNamePrefix').toUpperCase()} · ${moment(consultation?.date || undefined).format('YYYYMMDD')}`;
+        const bits = [nutritionistName];
+        if (nutritionistId) bits.push(`${t('consultation.pdf.license')} ${nutritionistId}`);
+        bits.push(ref);
+        let hx = margin;
+        if (logoData) { try { doc.addImage(logoData, 'PNG', margin, 9.5, 8, 8); hx = margin + 11; } catch { /* */ } }
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); setColor(COLORS.textMuted);
+        doc.text(bits.join('    |    '), pageWidth - margin, 14.5, { align: 'right' });
+        if (logoData) { doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); setColor(COLORS.text); doc.text(nutritionistName, hx, 15); }
+        drawLine(margin, 19, pageWidth - margin, 19, COLORS.border);
       }
 
-      // — Pie de portada —
-      const cyB = pageHeight - 20;
-      drawLine(margin, cyB, pageWidth - margin, cyB, COLORS.border);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); setColor(COLORS.textLight);
-      doc.text(`${t('consultation.pdf.subtitle')} · ${patient?.name || ''}`, margin, cyB + 5);
-      doc.text(dateStr, pageWidth - margin, cyB + 5, { align: 'right' });
+      // Fecha
+      yPos = 33;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); setColor(COLORS.text);
+      doc.text(moment(consultation?.date || undefined).format('DD [de] MMMM [de] YYYY'), margin, yPos);
+      yPos += 13;
 
-      // ─────────────── PLAN ───────────────
+      // Título grande del documento
+      doc.setFont("helvetica", "bold"); doc.setFontSize(19); setColor(COLORS.text);
+      doc.splitTextToSize(t('consultation.pdf.subtitle').toUpperCase(), contentWidth).forEach((ln: string) => { doc.text(ln, margin, yPos); yPos += 8.5; });
+      yPos += 4;
+
+      // Destinatario (paciente)
+      doc.setFont("helvetica", "bolditalic"); doc.setFontSize(12.5); setColor(COLORS.text);
+      doc.text(patient?.name || t('consultation.pdf.noName'), margin, yPos);
+      yPos += 5.5;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); setColor(COLORS.textMuted);
+      doc.text(lang === 'pt' ? 'Paciente' : 'Paciente', margin, yPos);
+      yPos += 11;
+
+      // — Cuerpo de la carta + firma (portada) —
+      yPos += 4;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); setColor(COLORS.text);
+      doc.text(lang === 'pt' ? 'A seguir, você encontrará seu plano alimentar personalizado.' : 'A continuación encontrarás tu plan alimentario personalizado.', margin, yPos);
+      yPos += 12;
+      doc.text(lang === 'pt' ? 'Atenciosamente,' : 'Atentamente,', margin, yPos);
+      yPos += 8;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(11); setColor(COLORS.text);
+      doc.text(nutritionistName, margin, yPos); yPos += 5.5;
+      if (nutritionistSpecialization) { doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); setColor(COLORS.textMuted); doc.text(nutritionistSpecialization, margin, yPos); yPos += 4.6; }
+      if (nutritionistEmail) { doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); setColor(COLORS.textMuted); doc.text(nutritionistEmail, margin, yPos); yPos += 4.6; }
+      if (nutritionistPhone) { doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); setColor(COLORS.textMuted); doc.text(nutritionistPhone, margin, yPos); yPos += 4.6; }
+      yPos += 3;
+      if (useRealSig && signatureData) {
+        try { doc.addImage(signatureData, 'PNG', margin, yPos, 48, 16); } catch { /* */ }
+      } else if (digitalSig) {
+        const drawW = Math.min(54, (digitalSig.w / digitalSig.h) * 15);
+        const drawH = drawW * (digitalSig.h / digitalSig.w);
+        try { doc.addImage(digitalSig.data, 'PNG', margin, yPos, drawW, drawH); } catch { /* */ }
+      }
+
+      // ─────────────── PÁGINA 2: FICHA CLÍNICA DEL PACIENTE ───────────────
       doc.addPage();
       addHeader();
+      {
+        const mL = (es: string, pt: string) => (lang === 'pt' ? pt : es);
+        const imc = (patient?.currentWeight && patient?.height) ? +(patient.currentWeight / Math.pow(patient.height / 100, 2)).toFixed(1) : null;
+        const fmtDate = (s?: string) => (s ? moment(s).format('DD/MM/YYYY') : '—');
+        const list = (arr?: string[]) => (arr && arr.length ? arr.join('  ·  ') : '—');
 
-      // ── Indicaciones generales (al inicio del plan; texto plano, sin recuadro) ──
+        // Encabezado de la ficha
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8); setColor(COLORS.textMuted); charSpace(0.6);
+        doc.text((lang === 'pt' ? 'Ficha clínica do paciente' : 'Ficha clínica del paciente').toUpperCase(), margin, yPos); charSpace(0);
+        yPos += 6;
+
+        const mm = measurements || {};
+        const mv = (v?: number, unit = 'cm') => (v && v > 0 ? `${v} ${unit}` : '—');
+
+        // ── Una sola tabla continua (secciones pegadas) ──
+        tBand(mL('Datos personales', 'Dados pessoais'));
+        tCells([
+          { label: mL('Nombre', 'Nome'), value: patient?.name || '—' },
+          { label: t('consultation.pdf.sex'), value: patient?.gender === 'male' ? t('consultation.pdf.male') : patient?.gender === 'female' ? t('consultation.pdf.female') : '—' },
+          { label: mL('Nacimiento', 'Nascimento'), value: fmtDate(patient?.birthDate) },
+          { label: t('consultation.pdf.age'), value: age !== null ? `${age} ${t('consultation.pdf.years')}` : '—' },
+          { label: mL('Teléfono', 'Telefone'), value: patient?.phone || '—' },
+          { label: mL('Ocupación', 'Ocupação'), value: patient?.occupation || '—' },
+        ]);
+        tField(mL('Correo', 'E-mail'), patient?.email || '—');
+
+        tBand(mL('Antropometría', 'Antropometria'));
+        const antropoRows: { label: string; value: string }[] = [
+          { label: t('consultation.pdf.height'), value: patient?.height ? `${patient.height} cm` : '—' },
+          { label: mL('Peso actual', 'Peso atual'), value: patient?.currentWeight ? `${patient.currentWeight} kg` : '—' },
+          { label: mL('Peso inicial', 'Peso inicial'), value: patient?.initialWeight ? `${patient.initialWeight} kg` : '—' },
+          { label: t('consultation.pdf.targetWeight'), value: patient?.targetWeight ? `${patient.targetWeight} kg` : '—' },
+          { label: 'IMC', value: imc ? `${imc}` : '—' },
+          { label: mL('Meta mensual', 'Meta mensal'), value: patient?.monthlyWeightGoal ? `${patient.monthlyWeightGoal} kg/${mL('mes', 'mês')}` : '—' },
+        ];
+        if (withNutrition && targetCalories) antropoRows.push({ label: mL('Objetivo', 'Objetivo'), value: `${targetCalories} kcal` });
+        tCells(antropoRows);
+
+        tBand(mL('Medidas corporales', 'Medidas corporais'));
+        tCells([
+          { label: mL('Cintura', 'Cintura'), value: mv(mm.waist) },
+          { label: mL('Cadera', 'Quadril'), value: mv(mm.hip) },
+          { label: mL('Cuello', 'Pescoço'), value: mv(mm.neck) },
+          { label: mL('Brazo', 'Braço'), value: mv(mm.arm) },
+          { label: mL('Pantorrilla', 'Panturrilha'), value: mv(mm.calf) },
+          { label: mL('Muñeca', 'Punho'), value: mv(mm.wrist) },
+          { label: mL('Pl. tricipital', 'Prega tricip.'), value: mv(mm.tricipital, 'mm') },
+          { label: mL('Pl. subescapular', 'Prega subesc.'), value: mv(mm.subescapular, 'mm') },
+          { label: mL('Pl. suprailíaco', 'Prega suprail.'), value: mv(mm.suprailiaco, 'mm') },
+        ]);
+
+        tBand(mL('Antecedentes clínicos', 'Histórico clínico'));
+        tField(t('consultation.setup.conditions'), list((patient?.medicalConditions || []).filter(Boolean)));
+        tField(mL('Alergias', 'Alergias'), list(patient?.allergies));
+        tField(mL('Medicamentos', 'Medicamentos'), list(patient?.medications));
+        tField(mL('Restricciones', 'Restrições'), list(patient?.dietaryRestrictions));
+      }
+
+      // ─────────────── PÁGINA 3: INDICACIONES GENERALES ───────────────
       if (indicaciones && indicaciones.trim() !== '') {
-        const indLines = doc.splitTextToSize(indicaciones, contentWidth);
-        ensure(indLines.length * 4.6 + 16);
+        newPage();
         doc.setFont("helvetica", "bold"); doc.setFontSize(8); setColor(COLORS.textMuted); charSpace(0.6);
         doc.text(t('consultation.pdf.generalIndications').toUpperCase(), margin, yPos);
         charSpace(0);
         yPos += 2.5;
         drawLine(margin, yPos, pageWidth - margin, yPos, COLORS.border);
         yPos += 5;
+        // Fijar la fuente del cuerpo ANTES de partir el texto (si no, se mide con otra y se corta).
         doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); setColor(COLORS.text);
+        const indLines = doc.splitTextToSize(indicaciones, contentWidth);
         indLines.forEach((line: string) => { ensure(6); doc.text(line, margin, yPos); yPos += 4.6; });
-        yPos += 9;
       }
+
+      // ─────────────── PÁGINA 4+: COMIDAS ───────────────
+      newPage();
 
       const fmtQty = (ing: { quantity?: number; unit?: { label: string; g: number }; baseUnit?: 'g' | 'ml' }) => {
         const q = Number(ing.quantity || 0);
@@ -308,6 +381,19 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
       const MEAL_BAND_H = 11;   // alto del encabezado de la comida
       const colDivX = margin + contentWidth * 0.68;  // divisor nombre | cantidad
 
+      // Alto estimado de una opción (para no dejar encabezados huérfanos ni partir bloques).
+      const optionHeight = (option: typeof activeMeals[number]['options'][number], multi: boolean): number => {
+        const ings = option.ingredients || [];
+        const obsText = [option.content, option.instructions].filter(Boolean).join('\n').trim();
+        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+        const obsLines = obsText ? doc.splitTextToSize(obsText, contentWidth - 6) : [];
+        const tableH = ings.length * ROW_H;
+        const obsH = obsLines.length > 0 ? obsLines.length * 4.6 + 7 : 0;
+        const optHeaderH = multi ? 6.5 : 0;
+        const totalsH = (withNutrition && ings.length > 0) ? 6 : 0;
+        return optHeaderH + tableH + obsH + totalsH + 6;
+      };
+
       activeMeals.forEach((meal) => {
         // Solo opciones con contenido (ingredientes u observaciones)
         const realOptions = meal.options.filter(o => (o.ingredients && o.ingredients.length > 0) || (o.content && o.content.trim()) || (o.instructions && o.instructions.trim()));
@@ -315,8 +401,9 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         const multi = realOptions.length > 1;
 
         // ── Encabezado de la COMIDA (una vez; agrupa sus opciones) ──
-        // Evitar encabezado huérfano: que quepan al menos el header + 2 filas.
-        ensure(MEAL_BAND_H + (multi ? 6 : 0) + ROW_H * 2 + 8);
+        // Evitar encabezado huérfano: mantener el encabezado junto con su primera opción.
+        const firstH = optionHeight(realOptions[0], multi);
+        ensure(MEAL_BAND_H + 4 + Math.min(firstH, pageHeight - margin - 70));
         setFill(COLORS.primaryBg); doc.rect(margin, yPos, contentWidth, MEAL_BAND_H, 'F');
         setFill(COLORS.primary); doc.rect(margin, yPos, 2.4, MEAL_BAND_H, 'F');
         doc.setFont("helvetica", "bold"); doc.setFontSize(13); setColor(COLORS.text);
@@ -330,6 +417,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         realOptions.forEach((option, optIdx) => {
           const ings = option.ingredients || [];
           const obsText = [option.content, option.instructions].filter(Boolean).join('\n').trim();
+          doc.setFont("helvetica", "normal"); doc.setFontSize(9);
           const obsLines = obsText ? doc.splitTextToSize(obsText, contentWidth - 6) : [];
 
           const tableH = ings.length * ROW_H;
@@ -411,15 +499,15 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         yPos += 5;      // separación extra entre comidas
       });
 
-      // (La firma del profesional va en la portada.)
+      // (La firma del profesional va en la portada/carta.)
       addFooter();
 
-      // Paginación "Página X / N" (2ª pasada). La portada (pág. 1) sin número.
+      // Paginación "Página X / N" en todas las páginas.
       const totalPages = (doc as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
-      for (let p = 2; p <= totalPages; p++) {
+      for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p);
         doc.setFont("helvetica", "normal"); doc.setFontSize(7); setColor(COLORS.textLight);
-        doc.text(`${t('consultation.pdf.pageOf')} ${p - 1} / ${totalPages - 1}`, pageWidth - margin, pageHeight - 12, { align: 'right' });
+        doc.text(`${t('consultation.pdf.pageOf')} ${p} / ${totalPages}`, pageWidth - margin, pageHeight - 12, { align: 'right' });
       }
 
       const safeName = (patient?.name || 'Paciente').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '').trim();
@@ -435,7 +523,7 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
     <div className="relative" ref={menuRef}>
       <div className="flex items-center">
         <button
-          onClick={() => generatePDF(includeNutrition)}
+          onClick={() => setMenuOpen(o => !o)}
           disabled={loading}
           title={t('consultation.pdf.btnDownload')}
           className="flex items-center justify-center gap-1.5 pl-2 pr-1.5 py-1 rounded-l text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors disabled:opacity-60"
@@ -453,22 +541,27 @@ const PrintNutritionPlan: React.FC<PrintNutritionPlanProps> = ({
         </button>
       </div>
       {menuOpen && (
-        <div className="absolute right-0 mt-1 z-50 w-60 rounded-md bg-white py-1 shadow-lg" style={{ border: '1px solid #E8E5DE' }}>
+        <div className="absolute right-0 mt-1 z-50 w-64 rounded-md bg-white py-1 shadow-lg" style={{ border: '1px solid #E8E5DE' }}>
           <button
-            onClick={() => setIncludeNutrition(v => !v)}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-[#FAF9F7] transition-colors"
+            onClick={() => generatePDF(false)}
+            className="w-full flex items-start gap-2.5 px-3 py-2 text-left hover:bg-[#FAF9F7] transition-colors"
           >
-            <span>{t('consultation.pdf.includeNutrition')}</span>
-            <span className={`relative inline-flex h-4 w-7 flex-shrink-0 rounded-full transition-colors ${includeNutrition ? 'bg-emerald-600' : 'bg-gray-300'}`}>
-              <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${includeNutrition ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            <Printer size={14} className="mt-0.5 text-gray-400 flex-shrink-0" />
+            <span>
+              <span className="block text-[12px] font-medium text-gray-800">{t('consultation.pdf.optSimple')}</span>
+              <span className="block text-[11px] text-gray-400">{t('consultation.pdf.optSimpleHint')}</span>
             </span>
           </button>
           <div className="my-1 border-t border-[#F0EDE8]" />
           <button
-            onClick={() => generatePDF(includeNutrition)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-emerald-700 hover:bg-emerald-50 transition-colors"
+            onClick={() => generatePDF(true)}
+            className="w-full flex items-start gap-2.5 px-3 py-2 text-left hover:bg-emerald-50 transition-colors"
           >
-            <Check size={13} /> {t('consultation.pdf.btnDownload')}
+            <Check size={14} className="mt-0.5 text-emerald-600 flex-shrink-0" />
+            <span>
+              <span className="block text-[12px] font-medium text-emerald-700">{t('consultation.pdf.optNutrition')}</span>
+              <span className="block text-[11px] text-gray-400">{t('consultation.pdf.optNutritionHint')}</span>
+            </span>
           </button>
         </div>
       )}
